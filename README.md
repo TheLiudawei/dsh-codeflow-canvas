@@ -17,6 +17,9 @@ nested JSON would trip the model tool call into `tool input is invalid JSON` →
 v0.6.0 added: **dual views (one import produces both the task pipeline and the module graph,
 switchable from the toolbar at any time), module highlighting when the agent edits code
 (based on real file-write tool calls), and a searchable two-level navigation list**.
+v1.0.1 fixes and upgrades: **test runs execute for real (self-contained run requests +
+end-of-turn reconciliation + one-click retry), the canvas fills the panel on all four sides,
+and projects move under `<workspace>/CodeFlow/` (configurable root, automatic legacy migration)**.
 
 ## What it looks like
 
@@ -56,9 +59,11 @@ A **CodeFlow (⬡)** icon appears in the sidebar; clicking it opens a full-scree
   with live counts. With ≥2 nodes in a category, clicking opens a **searchable two-level
   flyout** (filter by module name/path, ↑/↓/Enter keyboard navigation, zoom-to-fit and highlight
   on selection); with exactly 1 node it jumps directly.
-- **Persistence**: canvas edits auto-save to `<workspace>/flow-projects/<project>/workflow.json`
+- **Persistence**: canvas edits auto-save to `<workspace>/CodeFlow/flow-projects/<project>/workflow.json`
   (task pipeline) and `workflow.modules.json` (module graph); the active view is remembered in
-  `view.json`, restoring the last view and zoom after restart.
+  `view.json`, restoring the last view and zoom after restart. The project root is configurable
+  (toolbar ⚙ settings → global root + per-project override) and legacy `flow-projects/` data
+  migrates into the new root automatically on first start.
 - **Dark/light**: follows DSH's current theme (switching syncs the canvas instantly — no reload,
   no view loss).
 
@@ -106,12 +111,13 @@ Browser (panel iframe)
   ├── POST /codeflow/api/session   ← create/rebuild the project's dedicated session
   ├── GET  /codeflow/api/activity  ← live reasoning stream / steps / progress / file-edit records (in-memory only, 700–1000ms incremental pulls)
   ├── GET  /codeflow/api/undo      ← run history (newest first, tagged with view)
+  ├── GET/POST /codeflow/api/config ← v1.0: project root settings (global root + per-project override)
   └── POST /codeflow/api/undo      ← dryRun precheck / full restore (LIFO, shared across views)
                                         ↓
              agent executes per the skill → calls codeflow_canvas (render/progress, with view)
                                         ↓
    store (per-view independent rev holder)
-     + flow-projects/*/workflow.json + workflow.modules.json + view.json
+     + CodeFlow/flow-projects/*/workflow.json + workflow.modules.json + view.json
      + sessions.js (dedicated session binding)
    activity.js (in-memory trace buffer + edit table) + undo.js (.undo/ snapshots and restore)
 ```
@@ -148,6 +154,69 @@ Key design decisions:
 8. **Undo is per run.** `lib/undo.js` snapshots the project source tree before delivery; restore
    backs up current state first and only touches the snapshot candidate scope — changes inside
    `node_modules`/`dist`/`.git` can never be mistakenly reverted.
+
+## The v1.0.1 fixes and upgrade
+
+### A. 「测试运行」空转 → 真实执行、明确失败、一键重试
+
+Field report: clicking 测试运行 sent `[CodeFlow:RUN_NODE]` to the dedicated session, the agent
+replied with a few sentences, but never executed the tests and the node stayed `pending` forever —
+"no reaction". Four layers fix it:
+
+1. **Self-contained run requests** — `RUN_NODE` now carries `node` (`type`/`title`/`params`,
+   `cmd` included), `upstream` (direct upstreams with their `result`, clipped to 120 chars),
+   `cwd` (the directory commands must run in: an imported project's source tree, else the project
+   directory) and `expect` (one-line acceptance criterion) for `testrun`/`shell`; `RUN_ALL`
+   carries `order` (topo order of the `pending/failed` nodes). The first line is still a
+   single-line JSON; after it the host appends a three-line 「本次执行要求」 footer: you must
+   really execute this time ("ran it earlier in this session" does not count), you must fill back
+   via `progress` before the turn ends, and an un-executed node will be marked failed by the host.
+   `references/protocol.md` documents the new parsing rule (JSON = first line after the prefix).
+2. **Hardened skill semantics** — `SKILL.md` and `references/node-types.md` spell out the
+   `testrun` contract: run in the project root, record the real command/exit code/output tail,
+   `result` only from real output, missing runtime → `failed` with an actionable reason, and
+   never mark `done` without executing (especially "it passed earlier"). NEW-phase self-tests do
+   not count as a `testrun` execution.
+3. **Optimistic `running`** — the moment the prompt is queued, the target node (RUN_NODE) or the
+   first pending node (RUN_ALL) flips to `running`, so the click is visible within one poll
+   cycle; a failed delivery rolls the status back.
+4. **Turn-end reconciliation + retry** — if a run's turn ends without any `progress` for its
+   target (the exact field-report signature), the host marks the node `failed` with
+   `agent 未执行该节点`, records an in-memory `issue`, and the canvas shows a banner with a
+   one-click 重试 (re-delivers with `rerun=true`). A new run clears the issue. Silent
+   forever-`pending` is no longer a possible outcome.
+
+### B. Canvas fills the panel edge-to-edge
+
+The generated `canvas.html` used to start with `-->-->` (the port script's `replaceRange` keeps
+the end marker, and the header replacement carried its own `-->`), which the browser rendered as
+a one-line text node — the ~22px gap and the "arrow" in the field screenshot. The port script no
+longer duplicates the terminator and self-checks the output before writing; the embedded shell
+(`lib/canvas-page.js`) strips the canvas root's 1px border + 14px radius so the canvas fills the
+panel on all four sides (standalone preview keeps the card look); the toolbar wraps at narrow
+widths.
+
+### C. Projects move into `<workspace>/CodeFlow/`, configurable
+
+- New layout: `<根>/flow-projects/<项目名>/` with the default root `<工作区>/CodeFlow`.
+  `workflow.json`, `workflow.modules.json`, `session.json`, `view.json` and `.undo/` all live in
+  the project directory as before.
+- `lib/paths.js` is the single place that assembles those paths. Global custom root (any absolute
+  path) + per-project override (`projects[<key>].dir` points at the project directory itself);
+  the config lives at `<工作区>/CodeFlow/config.json` even when the root is moved elsewhere. A
+  corrupt config falls back to the default root with a one-time warning — it never loses projects
+  (`knownRoots` + the legacy location + overrides stay scannable).
+- **Automatic one-time migration**: on the first workspace resolution the plugin moves
+  `<workspace>/flow-projects/*` into `<根>/flow-projects/` (whole directory, `.undo/` included;
+  `rename` first, recursive copy + verify + delete as fallback; conflicts are never overwritten
+  and keep the legacy copy; failures keep the legacy copy and name the reason; a running project
+  is deferred to the next start). The summary lands in `<工作区>/CodeFlow/migration.json` and a
+  one-time canvas banner.
+- **Settings UI**: the toolbar gains a ⚙ 设置 button (hosted mode only) — readonly workspace +
+  default root, editable global root and per-project directory (both with 恢复默认), validation
+  (absolute paths only, no files, no plugin-package paths, mkdir + write-probe required) with the
+  Chinese error surfaced verbatim in the dialog; `GET/POST /codeflow/api/config` behind the same
+  fence as the other routes. The status bar's 已暂存 tooltip shows the project's absolute path.
 
 ## The three v0.6.0 upgrades
 
@@ -227,7 +296,7 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
   `flushAll()` as a backstop — the last write before exit no longer disappears.
 - **B9 two "untitled" buckets**: added `projectKeyOf`/`projectDirOf` — empty names, whitespace,
   `..`, and the literal `untitled` all land in the single `__untitled__` bucket (the on-disk
-  directory remains `flow-projects/untitled/` for compatibility); sidecar, undo root and activity
+  directory remains `CodeFlow/flow-projects/untitled/` for compatibility); sidecar, undo root and activity
   buffer all use the same mapping — no more two memory buckets sharing one directory and
   overwriting each other.
 - **B10 sporadic fetch failed (watch item)**: all client requests carry a 15 s timeout; the
@@ -268,7 +337,7 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
 
 - Creation triggers: first open of an existing project (boot), after NEW succeeds, after IMPORT
   succeeds, and as a fallback on first run; in-flight promises are deduplicated.
-- Persistent binding: a `flow-projects/<project>/session.json` sidecar (temp file + atomic
+- Persistent binding: a `session.json` sidecar inside the project directory (temp file + atomic
   rename; corrupt/version-mismatch counts as unbound); cold sessions adopt it directly
   (`sessionController.prompt` restores).
 - Delivery: `sessionController.prompt({requestId, sessionId, mode:'queue', content}, signal)`;
@@ -298,7 +367,7 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
 ### D. Undo the agent's file changes (per-run snapshots)
 
 - One `RUN_NODE`/`RUN_ALL` = one run. Before delivery the project root is snapshotted
-  (new projects = `flow-projects/<project>/`, imported projects = `meta.importedFrom`),
+  (new projects = `CodeFlow/flow-projects/<project>/` by default, configurable; imported projects = `meta.importedFrom`),
   excluding `.undo`/`.git`/`node_modules`/`venv`/`__pycache__`/`dist`/`build`/`target`/`coverage`/
   `.next`/`.cache` and `workflow.json`/`session.json`; symlinks are skipped and recorded
   (`partial:true`); the cap is 5000 files / 512 MB — beyond that an `undoable:false` record is
@@ -322,7 +391,9 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
 ```
 lib/index.js        Plugin entry: registers skill/commands/tools; wires HTTP, sessions, activity, undo (per view)
 lib/client.js       Browser side: sidebar icon + main panel + "open session" navigation bridge
-lib/routes.js       /codeflow routes and JSON API (state/view/save/import/action/session/activity/undo)
+lib/routes.js       /codeflow routes and JSON API (state/view/save/import/action/session/activity/undo/config)
+lib/paths.js        v1.0: the single place that assembles project paths (default <ws>/CodeFlow root,
+                    global custom root + per-project override, config.json, one-time legacy migration)
 lib/duo.js          Dual-import orchestration: one scan produces both pipeline and module graph (shared project name)
 lib/sessions.js     Canvas dedicated-session manager: ensure/rebind/sidecar/error recovery/delivery
 lib/activity.js     Activity Hub: event subscription, node mapping, ring buffer, progress, file-edit table (memory only)

@@ -35,8 +35,9 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 `[CodeFlow:*]` 消息里的 **`view`** 字段标明本次消息属于哪个视图，**`graphPath`** 指向该视图的图文件——
 回填时只写这个文件、只动这个视图。两张图的 `rev` 各自独立，写一边绝不会让另一边的版本号变化。
 
-图只有一份权威副本（每视图一份）：`<工作区>/flow-projects/<项目名>/workflow.json` 与
-`workflow.modules.json`。宿主在画布每次改动、以及你每次调用工具时都会写对应文件；
+图只有一份权威副本（每视图一份）：`<工作区>/CodeFlow/flow-projects/<项目名>/workflow.json` 与
+`workflow.modules.json`（v1.0 起项目根目录可在画布「设置」里自定义，以消息里的
+`graphPath` 为准）。宿主在画布每次改动、以及你每次调用工具时都会写对应文件；
 `graphPath` 就是它的绝对路径。
 
 ### 回填的首选通道：改文件 + load（重要）
@@ -64,7 +65,7 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 
 ## 1. 打开画布（/flow、用户要求打开画布）
 
-1. 确定初始图：若工作区有 `flow-projects/*/workflow.json`，选**最近修改**的一个，直接调
+1. 确定初始图：若工作区有 `CodeFlow/flow-projects/*/workflow.json`，选**最近修改**的一个，直接调
    `codeflow_canvas`（`mode="load"` + `project`）让宿主从磁盘重载（图已在磁盘上，不必经由工具参数搬运）；
    双视图项目默认载入任务流水线，想看模块图再加 `view:"modules"`。
    工作区一个项目都没有时，用 `mode="render"` 推一张空图
@@ -78,10 +79,16 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 ## 2. 处理画布消息
 
 收到以 `[CodeFlow:` 开头的用户消息时，**不要**重新开画布。按 `action` 分派。
-消息形如：
+消息**首行**是前缀 + 单行 JSON；RUN_* 消息 JSON 之后还有一段「本次执行要求」正文，
+是宿主附加的硬性规则（解析规则见 `protocol.md`）。消息形如：
 
 ```
-[CodeFlow:RUN_NODE]{"action":"RUN_NODE","project":"todo-cli","view":"modules","rev":7,"graphPath":"/abs/path/flow-projects/todo-cli/workflow.modules.json","nodeId":"m5","rerun":false,"undoable":true}
+[CodeFlow:RUN_NODE]{"action":"RUN_NODE","project":"todo-cli","view":"modules","rev":7,"graphPath":"/abs/path/CodeFlow/flow-projects/todo-cli/workflow.modules.json","nodeId":"m5","rerun":false,"undoable":true,"node":{"id":"m5","type":"module","title":"app.py","params":{"path":"/abs/app.py","symbol":""}}}
+
+本次执行要求（必须遵守）：
+1. 本次必须真实执行该节点，不得以「之前已经跑过/已经通过」为理由跳过；
+2. 结束前必须用 codeflow_canvas mode="progress" 回填 status/result/detail（nodeId=m5）；
+3. 未执行就结束回合，宿主会把该节点标记为失败。
 ```
 
 **图以 `graphPath` 为准**：先用 `read` 读它，不要凭记忆里更早的版本。文件里的 `rev` 就是该视图当前版本。
@@ -91,7 +98,8 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 
 字段：`{name, language, brief, autoRun, rev, graphPath}`。步骤：
 
-1. 项目目录定为 `<工作区>/flow-projects/<name>/`（宿主已做安全化；与现有目录冲突时问用户是覆盖、改名还是取消——
+1. 项目目录定为 `<工作区>/CodeFlow/flow-projects/<name>/`（v1.0 起项目根可在画布「设置」里自定义，
+   以消息里的 `graphPath` 为准；宿主已做安全化；与现有目录冲突时问用户是覆盖、改名还是取消——
    **不要静默覆盖**）。
    **画布可能已创建骨架**：若 `graphPath` 指向的图带 `meta.starter:true`，说明宿主为了让"新建"在无会话时也能成功，
    已经写好一张 `requirement → design → codegen → … → deliver` 的骨架。直接在它上面补全/替换，不要重复建项目。
@@ -138,15 +146,24 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 ### RUN_NODE / RUN_ALL — 执行
 
 字段：`RUN_NODE` 带 `nodeId` 与 `rerun`；两者都带 `project`、`view`、`rev`、`graphPath`、`undoable`。
-这条消息**只会出现在该项目的画布专用会话**里。步骤：
+v1.0 起 RUN_* 消息**自包含**：`RUN_NODE` 另带 `node`（目标节点的 `type`/`title`/`params`）、
+`upstream`（直接上游的 `status` 与 `result` 摘要）；`RUN_ALL` 另带 `order`（本次要执行的节点 id，
+拓扑序）；`testrun`/`shell` 还带 `cwd`（必须执行命令的目录）与 `expect`（验收标准）。
+JSON 之后的「本次执行要求」正文是**硬性规则**。这条消息**只会出现在该项目的画布专用会话**里。步骤：
 
 1. `read` 出 `graphPath` 的图（或 `codeflow_canvas` `mode="read"` + `project` + `view`）。
 2. 定目标：`RUN_NODE` 目标 = `nodeId`；`rerun=true` 时目标及其上游全部重跑，否则只补跑 `pending/failed` 的上游。
-   `RUN_ALL` 按拓扑序执行**当前视图**的所有节点（`done` 跳过；`failed` 重试一次；`skipped` 跳过）。
+   `RUN_ALL` 按 `order`（消息里的执行清单）执行**当前视图**的节点。
    运行任务流水线不会影响模块图的任何状态，反之亦然。
-3. 逐节点执行，语义见 `node-types.md` 各类型的"执行语义"。顺序：置 `running` → 用工具真干活 → 置 `done`/`failed`
-   并写 `result`/`detail`。上游的 `result`/`detail` 作为该节点的输入上下文。
-4. **每个节点都通过 `progress` 模式实时上报**（画布会展示思考流与步骤；模块视图运行时，
+3. **硬规则（违反任何一条都算失败，宿主会对账）**：
+   - **「同一会话里之前跑过」不算本次执行**：用户点运行就是一次新的执行请求，必须重跑并回填——
+     哪怕你在 NEW 阶段刚跑过同样的测试、结果是通过；
+   - **不得只回复不执行**：没有任何真实工具调用的运行回合，宿主会在回合结束时把目标节点置
+     `failed`（`result: agent 未执行该节点`），画布会显示原因和「重试」按钮；
+   - 每个节点结束时必须 `progress` 置终态（`done`/`failed`）；`running` 不许留到回合结束。
+4. 逐节点执行，语义见 `node-types.md` 各类型的"执行语义"。顺序：置 `running` → 用工具真干活 → 置 `done`/`failed`
+   并写 `result`/`detail`。上游的 `result`/`detail`（消息 `upstream` 或图里）作为该节点的输入上下文。
+5. **每个节点都通过 `progress` 模式实时上报**（画布会展示思考流与步骤；模块视图运行时，
    宿主还会根据你真实编辑的文件高亮所属模块）：
    1. 开始时：`{"mode":"progress","project":"<项目>","view":"<view>","nodeId":"<id>","status":"running","step":"开始：<动词>"}`
    2. 每个关键动作后：`progress(step="读取 src/app.py")`、`progress(step="写入 3 个文件")`、`progress(step="运行测试")`
@@ -154,11 +171,11 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
    4. 结束时：`progress(status="done"|"failed", result=…, detail=…, artifacts=[…])`。
    5. 全部节点结束后，把更新后的整图写入 `graphPath` 指向的图文件，再调一次
       `{"mode":"load","project":"<项目>","view":"<view>"}` 保持图一致（不要把整图塞进工具参数）。
-5. `testrun`、`shell` 要跑命令：用会话已有的 shell 工具与项目自身依赖；**运行时不可用（如本机无 Node/Python）
-   时把节点置 `failed` 并在 detail 说明，绝不伪造通过**。
-6. 实际写文件的节点（codegen/edit/fix/testgen/docgen/write/module/deliver；shell 仅在明确产出文件时）必须在
+6. `testrun`、`shell` 要跑命令：**在 `cwd`（消息里给的目录）下执行**；用会话已有的 shell 工具与项目自身依赖；
+   **运行时不可用（如本机无 Node/Python）时把节点置 `failed` 并在 detail 说明，绝不伪造通过**。
+7. 实际写文件的节点（codegen/edit/fix/testgen/docgen/write/module/deliver；shell 仅在明确产出文件时）必须在
    完成 `progress` 或最终整图里带 `artifacts`（见 `node-types.md`）。
-7. 最终回复：每个执行节点的结果一行（✓/✗ + result），若有新增文件再附产出文件树；
+8. 最终回复：每个执行节点的结果一行（✓/✗ + result），若有新增文件再附产出文件树；
    若 `undoable:false`（快照失败）或运行前有 `warning`，明确转告用户。
 
 ### SAVE
@@ -208,8 +225,9 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 
 ## 6. 多项目与历史
 
-- 每个 `flow-projects/<name>/` 是一个项目（任务流水线 `workflow.json` + 可选的模块图 `workflow.modules.json`）。
-  用户再次 `/flow` 时载入最近项目；用户想切换项目时，列出 `flow-projects/` 下的项目供选择（或
+- 每个 `CodeFlow/flow-projects/<name>/` 是一个项目（任务流水线 `workflow.json` + 可选的模块图 `workflow.modules.json`；
+  根目录可在画布「设置」里自定义）。
+  用户再次 `/flow` 时载入最近项目；用户想切换项目时，列出项目根下的项目供选择（或
   `codeflow_canvas` 的 `mode="read"`）。
 - 画布面板同一时刻只显示一个项目的一个视图；切换项目 = 把对应图渲染过去，切换视图 = 工具栏分段控件（纯前端，不经过你）。
 - 每个项目有各自的画布专用会话；项目 A 的运行绝不会进入项目 B 的会话。
@@ -218,7 +236,8 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 
 - `shell` 节点执行任意命令：只执行 `params.cmd` 里的命令本身，不追加其他操作；破坏性命令
   （删目录、格式化、推远端等）先向用户确认。
-- 导入扫描只读；生成/修改文件只发生在 `flow-projects/` 与用户明确指定的目标目录。
+- 导入扫描只读；生成/修改文件只发生在项目的项目目录（默认 `CodeFlow/flow-projects/<项目名>/`）
+  与用户明确指定的目标目录。
 - 不在画布或图里写密钥等敏感信息。
 - **不要**读取或修改项目的 `.undo/` 目录：那里是宿主的运行快照（撤销用），不属于项目源码，
   也不应出现在交付物、导入或文档里。

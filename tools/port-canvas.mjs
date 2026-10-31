@@ -44,12 +44,15 @@ function replaceOnce(src, needle, replacement, label) {
 let text = readFileSync(SRC, 'utf8')
 
 /* ---------------------------------------------------------------- header --- */
+/* replaceRange 保留 endMarker（src.slice(end) 从 '-->' 开始），所以 replacement
+   绝不能再自带一个 '-->'：v0.6.x 的替换结尾多写了一个终止符，生成物第 6 行变成
+   '-->-->'，浏览器把多余的 '-->' 当正文文本渲染出一条 ~22px 的空隙（v1.0 B）。 */
 text = replaceRange(text, '<!--', '-->', `<!--
   CodeFlow 画布（DSH 面板文档）
   本文件由 tools/port-canvas.mjs 从 ZCode 版 canvas-template.html 生成，
   只改动了与宿主的接线（数据来源、消息通道、图标、高度），编辑器行为保持不变。
   请勿手工修改：改上游模板或改本脚本，然后重新生成。
--->`, 'header comment')
+`, 'header comment')
 
 /* ------------------------------------------------------- undo toolbar btn --- */
 /* 撤销运行：宿主每次画布运行前对项目源码树做快照，撤销恢复文件与节点状态（lib/undo.js） */
@@ -74,6 +77,31 @@ text = replaceOnce(
   + '    </div>\n'
   + '    <button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall"',
   'toolbar view tabs',
+)
+
+/* -------------------------------------------------- settings + tooltip --- */
+/* v1.0：设置入口（齿轮 → 设置弹窗：项目根目录/项目目录），独立预览隐藏；
+   保存按钮的 tooltip 同步改为 CodeFlow/flow-projects/（需求 C 的文案） */
+text = replaceOnce(
+  text,
+  '<button type="button" class="cf-tbtn" id="cf-tb-save" data-tooltip="把工作流图保存到 flow-projects/ 目录"><i data-lucide="save"></i>保存</button>',
+  '<button type="button" class="cf-tbtn" id="cf-tb-settings" data-tooltip="CodeFlow 设置：项目根目录与项目目录" aria-label="设置" hidden><i data-lucide="settings"></i>设置</button>\n'
+  + '    <button type="button" class="cf-tbtn" id="cf-tb-save" data-tooltip="把工作流图保存到 CodeFlow/flow-projects/ 目录"><i data-lucide="save"></i>保存</button>',
+  'toolbar settings button + save tooltip',
+)
+
+/* ------------------------------------------------- banner retry button --- */
+/* v1.0（A3.4）：宿主对账出的「agent 未执行该节点」issue → 横幅 + 一键重试 */
+text = replaceOnce(
+  text,
+  '<div class="cf-banner" id="cf-banner" hidden>\n'
+  + '    <span class="cf-spin">◐</span><span id="cf-banner-text"></span>\n'
+  + '    <button type="button" class="cf-banner-x" id="cf-banner-x" aria-label="关闭">✕</button>',
+  '<div class="cf-banner" id="cf-banner" hidden>\n'
+  + '    <span class="cf-spin">◐</span><span id="cf-banner-text"></span>\n'
+  + '    <button type="button" class="cf-banner-retry" id="cf-banner-retry" hidden>重试</button>\n'
+  + '    <button type="button" class="cf-banner-x" id="cf-banner-x" aria-label="关闭">✕</button>',
+  'banner retry button',
 )
 
 /* ------------------------------------------------- session status entry --- */
@@ -182,7 +210,8 @@ var ICONS={
   'save':'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
   'shapes':'<path d="M8.5 2.8 13 10H4z"/><rect x="3" y="13.5" width="9" height="8" rx="1.2"/><circle cx="17.5" cy="17.5" r="4.2"/>',
   'unlink':'<path d="M18.5 13.5a4 4 0 0 0 0-5.7l-2.6-2.6a4 4 0 0 0-5.7 0l-1.3 1.3"/><path d="M5.5 10.5a4 4 0 0 0 0 5.7l2.6 2.6a4 4 0 0 0 5.7 0l1.3-1.3"/><path d="M4 4l2.5 2.5M17.5 17.5 20 20"/>',
-  'undo-2':'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'
+  'undo-2':'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>'
 };
 function refreshIcons(){
   var pending=ROOT.querySelectorAll('[data-lucide]');
@@ -242,6 +271,21 @@ function persistProject(){
     });
 }
 `, 'saveProject')
+
+/* ------------------------------------------------------------ v1.0 copy --- */
+/* 需求 C：项目目录迁到 CodeFlow/flow-projects/，画布里的说明文案同步 */
+text = replaceOnce(
+  text,
+  `+'<div class="cf-hintbox">agent 将根据需求在 <b>flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线。</div>'`,
+  `+'<div class="cf-hintbox">agent 将根据需求在 <b>CodeFlow/flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线；可在「设置」里自定义根目录。</div>'`,
+  'new-project hint copy',
+)
+text = replaceOnce(
+  text,
+  '「保存项目」会让 agent 把工作流图写入 <b>flow-projects/&lt;项目&gt;/workflow.json</b>。',
+  '「保存项目」会让宿主把工作流图写入 <b>CodeFlow/flow-projects/&lt;项目&gt;/workflow.json</b>（可在「设置」里改根目录）。',
+  'help dialog copy',
+)
 
 /* ------------------------------------------------------ import dialog --- */
 /* 导入不再唤醒 agent，也不再二选一：目录扫描由宿主 lib/duo.js 确定性完成，
@@ -944,6 +988,13 @@ const EXTRA_CSS = `
 .cf-node.cf-edit-related{border-style:dashed;border-color:rgba(245,158,11,.6);}
 .cf-naveditdot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex:0 0 6px;}
 @media (prefers-reduced-motion: reduce){.cf-node.cf-editing{animation:none;box-shadow:0 0 0 3px rgba(245,158,11,.35),0 4px 16px rgba(0,0,0,.45);}}
+/* ---- v1.0：设置弹窗 / 横幅重试按钮 ---- */
+.cf-setrow{margin-top:9px;display:flex;flex-direction:column;gap:4px;}
+.cf-setrow label{font-size:11.5px;color:var(--cf-dim);}
+.cf-setline{display:flex;gap:6px;align-items:center;}
+.cf-setline .cf-in{flex:1;min-width:0;}
+.cf-banner-retry{background:none;border:1px solid #c3cbff;color:#c3cbff;border-radius:10px;font-size:11px;padding:1px 10px;cursor:pointer;flex:0 0 auto;white-space:nowrap;}
+.cf-banner-retry:hover{background:rgba(124,140,255,.18);}
 `
 
 /* ------------------------------------------------ canvas extras script --- */
@@ -1140,7 +1191,7 @@ function updateNodeLine(id){
 
 /* ---- Activity 轮询 ---- */
 function activityResetLocal(){
-  ACT.running=false;ACT.seq=0;ACT.entries=[];ACT.byNode={};ACT.progress=null;ACT.action=null;ACT.nodeId=null;ACT.startedAt=null;ACT.deliverToasted=false;
+  ACT.running=false;ACT.seq=0;ACT.entries=[];ACT.byNode={};ACT.progress=null;ACT.action=null;ACT.nodeId=null;ACT.startedAt=null;ACT.deliverToasted=false;ACT.issueAt=0;
   decorateNodes();renderMonitor();stopActivitySync();
 }
 function startActivitySync(){
@@ -1185,6 +1236,13 @@ function applyActivity(p){
   ACT.seq=Math.max(ACT.seq,typeof p.seq==='number'?p.seq:seen);
   /* v0.6.0：真实编辑状态（宿主从写文件工具调用中提取）→ 节点高亮/侧边栏圆点 */
   applyEditData(p.edits);
+  /* v1.0：项目实际落盘目录（状态栏 tooltip 用）；宿主对账出的 issue → 横幅+重试 */
+  if(typeof p.projectDir==='string'&&p.projectDir){PROJECT_DIR=p.projectDir;updateProjectDirTip();}
+  if(p.issue&&p.issue.text&&p.issue.at!==ACT.issueAt){
+    ACT.issueAt=p.issue.at;
+    showIssue(p.issue);
+    if(typeof p.issue.nodeId==='string'&&p.issue.nodeId)updateNodeLine(p.issue.nodeId);
+  }
   var wasRunning=ACT.running;
   ACT.running=!!p.running;
   ACT.action=p.action||ACT.action;
@@ -1469,20 +1527,31 @@ window.addEventListener('keydown',function(e){
 function initCanvasExtras(){
   if(!HOSTED)return;
   renderSessionChip();
+  updateProjectDirTip();
   /* 撤销按钮的 click 绑定（v0.5.2 起只有 Ctrl+Alt+Z 生效，按钮本身漏绑了） */
   var undoBtn=$('cf-tb-undo');
   if(undoBtn)undoBtn.addEventListener('click',openUndoDialog);
+  /* v1.0：设置入口只在宿主模式显示（独立预览隐藏） */
+  var settingsBtn=$('cf-tb-settings');
+  if(settingsBtn){
+    settingsBtn.hidden=false;
+    settingsBtn.addEventListener('click',openSettingsDialog);
+  }
   /* 双视图切换控件：两个视图都可用才显示（单视图项目不出现点不动的 tab） */
   renderViewTabs();
   applyEditMarks();
   /* 损坏文件被隔离：第一优先级告知，比会话横幅更重要 */
+  var bannerShown=false;
   if(BOOT.degraded){
     showBanner('警告：当前视图的图文件已损坏（'+(BOOT.degraded.reason||'未知原因')+'）'
       +(BOOT.degraded.quarantinedTo?('，坏文件已隔离为 '+BOOT.degraded.quarantinedTo):'')
       +'；画布已重置，请重新编辑后保存。');
+    bannerShown=true;
   }
-  else if(BOOT.sessionNew)showBanner('已为「'+((G.project&&G.project.name)||'项目')+'」创建独立会话；画布中的运行只在该会话执行。');
-  else if(SESSION.warning)showBanner(SESSION.warning);
+  else if(BOOT.sessionNew){showBanner('已为「'+((G.project&&G.project.name)||'项目')+'」创建独立会话；画布中的运行只在该会话执行。');bannerShown=true;}
+  else if(SESSION.warning){showBanner(SESSION.warning);bannerShown=true;}
+  /* v1.0（需求 C）：一次性迁移汇总（moved/conflicts/failed 都要点名） */
+  if(!bannerShown&&BOOT.migration)showBanner(BOOT.migration);
   if(hasRunningNodes())startActivitySync();
 }
 `
@@ -1667,6 +1736,99 @@ if(viewTabsWrap)viewTabsWrap.addEventListener('keydown',function(e){
 });
 `
 
+/* --------------------------------------- settings + issue retry (v1.0) --- */
+/* v1.0：① 宿主对账出的 issue（agent 没执行节点）→ 横幅 + 一键重试（rerun=true）；
+   ② 工具栏齿轮 → 设置弹窗（项目根目录 / 当前项目目录，GET/POST /api/config）；
+   ③ 状态栏「已暂存」的 tooltip 显示项目实际落盘目录。独立预览（!HOSTED）下
+   重试按钮与设置入口都不可见。 */
+const SETTINGS_JS = `
+/* ================= v1.0：issue 重试 / 设置 / 项目目录 tooltip ================= */
+var PROJECT_DIR=(HOSTED&&BOOT.projectDir)||null;
+function updateProjectDirTip(){
+  var el=$('cf-saved');if(!el)return;
+  if(PROJECT_DIR){el.title=PROJECT_DIR;try{el.setAttribute('data-tooltip',PROJECT_DIR);}catch(e){}}
+}
+/* 普通 banner 不带重试；issue banner 由 showIssue 显示（包一层 showBanner 统一收起按钮） */
+var showBannerBase=showBanner;
+showBanner=function(text){
+  var btn=$('cf-banner-retry');
+  if(btn)btn.hidden=true;
+  ACT.lastIssue=null;
+  showBannerBase(text);
+};
+function showIssue(issue){
+  ACT.lastIssue=issue||null;
+  showBannerBase((issue&&issue.text)||'');
+  var btn=$('cf-banner-retry');
+  if(btn)btn.hidden=!(issue&&issue.nodeId);
+}
+$('cf-banner-retry').addEventListener('click',function(){
+  var id=(ACT.lastIssue&&ACT.lastIssue.nodeId)||null;
+  var btn=$('cf-banner-retry');
+  if(btn)btn.hidden=true;
+  if(id){toast('正在重发本次运行…');runNode(id,true);}
+});
+/* ---- 设置弹窗：项目根目录（全局默认根）+ 当前项目目录（单项目覆盖） ---- */
+function openSettingsDialog(){
+  if(!HOSTED)return;
+  var name=(G.project&&G.project.name)||'';
+  apiGet('/codeflow/api/config'+(name?('?project='+encodeURIComponent(name)):''))
+    .then(function(cfg){renderSettingsDialog(cfg||{});})
+    .catch(function(err){toast('读取设置失败：'+((err&&err.message)||err),'err');});
+}
+function renderSettingsDialog(cfg){
+  var name=cfg.project||((G.project&&G.project.name)||'');
+  var h=dHead('settings','CodeFlow 设置')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-kv"><b>工作区</b><span class="cf-artpath">'+esc(cfg.workspace||'—')+'</span></div>'
+    +'<div class="cf-kv"><b>默认根</b><span class="cf-artpath">'+esc(cfg.defaultRoot||'—')+'</span></div>'
+    +'<div class="cf-setrow"><label for="cf-set-root">项目根目录（空 = 用默认根；项目仍写在 根/flow-projects/&lt;项目名&gt;/）</label>'
+    +'<div class="cf-setline"><input class="cf-in" id="cf-set-root" type="text" spellcheck="false" placeholder="'+esc(cfg.defaultRoot||'')+'" value="'+esc(cfg.customRoot||'')+'">'
+    +'<button type="button" class="cf-btn mini" data-act="reset-root">恢复默认</button></div></div>'
+    +(name?'<div class="cf-setrow"><label for="cf-set-dir">当前项目目录（'+esc(name)+'；空 = 用根目录）</label>'
+    +'<div class="cf-setline"><input class="cf-in" id="cf-set-dir" type="text" spellcheck="false" placeholder="（用根目录下的 flow-projects/'+esc(name)+'）" value="'+esc(cfg.projectOverride||'')+'">'
+    +'<button type="button" class="cf-btn mini" data-act="reset-dir">恢复默认</button></div></div>':'')
+    +'<div class="cf-hintbox">修改只影响后续新建/解析；已有项目不会自动搬家。旧根里的项目仍可在项目列表中打开。</div>'
+    +'<div class="cf-sechint" id="cf-set-err" style="color:#f87171;min-height:14px"></div>'
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="cancel">取消</button>'
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="cf-btn cf-primary" data-act="save">保存</button></div>';
+  openModal(h);
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  d.querySelector('[data-act="cancel"]').addEventListener('click',closeModal);
+  var rootInput=d.querySelector('#cf-set-root');
+  var dirInput=d.querySelector('#cf-set-dir');
+  var errEl=d.querySelector('#cf-set-err');
+  var resetRoot=d.querySelector('[data-act="reset-root"]');
+  if(resetRoot)resetRoot.addEventListener('click',function(){rootInput.value='';});
+  var resetDir=d.querySelector('[data-act="reset-dir"]');
+  if(resetDir)resetDir.addEventListener('click',function(){dirInput.value='';});
+  d.querySelector('[data-act="save"]').addEventListener('click',function(){
+    var saveBtn=d.querySelector('[data-act="save"]');
+    saveBtn.disabled=true;
+    errEl.textContent='保存中…';
+    var body={};
+    var rootValue=rootInput.value.trim();
+    body.root=rootValue.length>0?rootValue:null;
+    if(name&&dirInput){
+      var dirValue=dirInput.value.trim();
+      body.project=name;
+      body.projectDir=dirValue.length>0?dirValue:null;
+    }
+    apiPost('config',body).then(function(saved){
+      closeModal();
+      if(saved&&saved.projectDir){PROJECT_DIR=saved.projectDir;updateProjectDirTip();}
+      toast('设置已保存：项目根 = '+((saved&&saved.root)||'默认'),'ok');
+    }).catch(function(err){
+      saveBtn.disabled=false;
+      errEl.textContent='保存失败：'+((err&&err.message)||String(err));
+    });
+  });
+}
+`
+
 /* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动 */
 const LIGHT_CSS = readFileSync(new URL('theme-light.css', import.meta.url), 'utf8').trim()
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
@@ -1676,17 +1838,33 @@ text = replaceOnce(text, '</style>', `\n${EXTRA_CSS}\n${LIGHT_CSS}\n</style>`, '
 
 /* ---------------------------------------------------- inject extras tail --- */
 /* 行为层注入点：boot() 之前定义（可包装已提升的函数声明），boot() 之后初始化挂钩。
-   VIEW_JS 在前（视图状态是编辑高亮/切换的前提），ACTIVITY_JS 在后。 */
+   VIEW_JS 在前（视图状态是编辑高亮/切换的前提），ACTIVITY_JS 在后，SETTINGS_JS
+   最后（它包装 showBanner 并引用 ACT/runNode 等既有绑定）。 */
 text = replaceOnce(
   text,
   '\nboot();\n})();',
-  '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\nboot();\ninitCanvasExtras();\n})();',
+  '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\nboot();\ninitCanvasExtras();\n})();',
   'canvas extras script',
 )
 
 /* ------------------------------------------------------------------ write --- */
 if (text.includes('__CF_GRAPH_JSON__')) throw new Error('placeholder survived the port')
 if (/window\.zcode/.test(text)) throw new Error('legacy zcode bridge survived the port')
+/* v1.0（缺陷 B）生成自检：头部注释只允许一个终止符，且注释结束后第一个元素必须是
+   画布根节点。多出来的 '-->' 会被浏览器当成正文文本节点渲染成一条空隙（v0.6.x
+   的顶部空隙正是它），这里直接抛错，防止再犯。 */
+if (text.includes('-->-->')) {
+  throw new Error('duplicated comment terminator in the generated canvas (-->-->)')
+}
+if (!text.startsWith('<!--')) {
+  throw new Error('generated canvas must start with the header comment')
+}
+const headerEnd = text.indexOf('-->')
+if (headerEnd < 0) throw new Error('header comment is never closed')
+const firstElement = text.slice(headerEnd + 3).replace(/^\s*/, '')
+if (!firstElement.startsWith('<div id="codeflow-canvas"')) {
+  throw new Error(`first element after the header comment must be the canvas div, got: ${JSON.stringify(firstElement.slice(0, 40))}`)
+}
 writeFileSync(OUT, text, 'utf8')
 
 console.log(`ported ${SRC}\n     -> ${OUT} (${text.length} chars)`)

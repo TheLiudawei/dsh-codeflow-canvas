@@ -36,10 +36,10 @@ async function check(name, fn) {
   }
 }
 
-/** A throwaway workspace with `flow-projects/<name>/` already populated. */
+/** A throwaway workspace with `CodeFlow/flow-projects/<name>/` already populated. */
 async function makeProject(name, files) {
   const workspace = await rm_mkdtemp('codeflow-undo-ws-')
-  const dir = path.join(workspace, 'flow-projects', name)
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', name)
   await mkdir(dir, { recursive: true })
   for (const [rel, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(dir, rel)), { recursive: true })
@@ -443,6 +443,31 @@ console.log('\n[cross-view restore]')
   })
   await rm(workspace, { recursive: true, force: true })
 }
+
+/* v1.0：项目根走 CodeFlow 根（lib/paths.js 解析），.undo 跟着项目目录走。 */
+await check('resolveRoot resolves through the CodeFlow root; .undo lives inside the project dir', async () => {
+  const { workspace, dir } = await makeProject('paths-demo', {
+    'workflow.json': '{"format":"codeflow/1","rev":0,"project":{"name":"paths-demo"},"nodes":[],"links":[]}',
+    'src/app.py': 'print("hi")\n',
+  })
+  try {
+    store.bindCwd('paths-demo', workspace)
+    const scoped = createUndoManager({ store, logger: console })
+    const resolved = await scoped.resolveRoot('paths-demo')
+    assert.equal(resolved.kind, 'project')
+    assert.equal(
+      String(resolved.root).split(path.sep).join('/'),
+      String(path.join(workspace, 'CodeFlow', 'flow-projects', 'paths-demo')).split(path.sep).join('/'),
+      'the snapshot root is the project dir under CodeFlow/flow-projects/',
+    )
+    const snap = await scoped.beginRun('paths-demo', { action: 'RUN_ALL', nodes: [] })
+    assert.equal(snap.undoable, true, JSON.stringify(snap))
+    assert.ok(snap.root.startsWith(dir), '.undo is created inside the project directory')
+    await scoped.abortRun('paths-demo', snap.runId)
+  } finally {
+    await rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {})
+  }
+})
 
 console.log('\n[summary]')
 undo.reset()

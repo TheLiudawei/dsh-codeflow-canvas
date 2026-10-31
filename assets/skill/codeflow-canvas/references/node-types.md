@@ -29,8 +29,8 @@
 { "artifacts": [ { "path": "src/app.py", "label": "程序入口", "kind": "code" } ] }
 ```
 
-- `path`：**工作区相对路径**（`/` 分隔）。以工作区根为基准，与 `flow-projects/<project>/` 同级——
-  **不要**把 `flow-projects/<project>/` 前缀写两遍。工作区外的文件（导入项目）用绝对路径。
+- `path`：**工作区相对路径**（`/` 分隔）。以工作区根为基准，与 `CodeFlow/flow-projects/<project>/` 同级——
+  **不要**把 `CodeFlow/flow-projects/<project>/` 前缀写两遍。工作区外的文件（导入项目）用绝对路径。
 - `label`：≤80 字符，可省略；`kind`：`code | doc | test | config | asset | other`，可省略。
 - 每个节点最多 50 条；宿主会去重、去空、去控制字符，非法项直接丢弃。
 - **谁负责填**：`codegen`、`edit`、`fix`、`testgen`、`docgen`、`write`、`deliver` 必填；
@@ -94,13 +94,25 @@
 - 输入：`代码(code)`；输出：`测试(code)`
 - 控件：`framework`（select：自动/pytest/unittest/jest 或 vitest/go test，默认自动）
 - 执行语义：为核心模块写测试文件（放在 tests/ 或与源码同目录，遵循语言惯例）。`result` = `N 个测试文件，约 M 个用例`。
+- **注意**：新建项目（NEW）阶段为自检跑过的测试**不代表** `testrun` 节点已执行——
+  用户点「测试运行」时该节点仍是 `pending`，必须重新真实执行并回填，不得把之前的运行当成它的结果。
 
 ### 执行类（橙 #f97316）
 
 **`testrun` 测试运行** — 运行测试并报告结果。
 - 输入：`测试/代码(code)`；输出：`测试报告(report)`
 - 控件：`cmd`（text，空=自动推断）
-- 执行语义：运行测试命令（python→pytest/unittest，node→npm test 等；运行时不可用则如实 `failed` 并说明缺少运行时，不要伪造结果）。`result` = `N passed, M failed`；`detail` = 失败用例摘要。
+- 执行语义（v1.0 起逐条硬性要求，违反任何一条都算伪造/失败）：
+  1. **工作目录 = 项目根**（`[CodeFlow:RUN_NODE]` 消息里的 `cwd`；没有时取 `graphPath` 的上一级），
+     **不是工作区根**——在工作区根执行 `python -m unittest discover -s tests` 会 0 用例或直接报错；
+  2. 命令取 `params.cmd`；为空时按语言推断（python：有 pytest 用 `python -m pytest -q`，否则
+     `python -m unittest discover -s tests -v`；node：`npm test`）；
+  3. **必须记录**：实际执行的命令、退出码、stdout/stderr 尾部（≤300 字写进 `detail`）；
+  4. `result` 只能来自真实输出：如 `24 passed, 0 failed` / `exit 1 · 3 failed`；解析不出统计就写
+     `exit 0 · N tests` 一类可从输出验证的摘要；
+  5. 运行时缺失、命令不存在、超时 → `failed`，`detail` 写可行动原因（缺什么、怎么装）；
+  6. **禁止未执行置 done**（尤其"之前跑过/已经通过"——用户点运行就是一次新的执行请求），
+     禁止伪造通过。宿主会在回合结束时对账：没执行就结束回合 → 节点 `failed` + 画布「重试」。
 
 **`shell` 命令执行** — 执行任意命令（谨慎）。
 - 输出：`输出(report)`
@@ -137,7 +149,8 @@
 - 执行语义（v0.5.0 起，按以下顺序执行）：
 
   1. **收集交付物**：沿入线向上游做传递闭包，收集所有上游节点的 `artifacts`（去重）。
-     若上游没有 `artifacts`（常见于导入项目），退化为扫描项目目录：扫描根 = 新建项目 `flow-projects/<project>/`，
+     若上游没有 `artifacts`（常见于导入项目），退化为扫描项目目录：扫描根 = 新建项目的项目目录
+     （默认 `<工作区>/CodeFlow/flow-projects/<project>/`），
      导入项目 = 图里 `meta.importedFrom`；包含项目根、`src/`、`app/`、`lib/`、`tests/`、`docs/` 等常见目录；
      跳过 `.git`、`.undo`、`node_modules`、`venv`、`.venv`、`__pycache__`、`dist`、`build`、`target`、`coverage`、`.next`；
      跳过 `workflow.json`、`session.json` 等 CodeFlow 元数据；跳过 `.env`、`*.pem`、`*.key`、`id_rsa*`、

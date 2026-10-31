@@ -141,7 +141,7 @@ async function call(handler, method, url, body) {
 }
 
 /** The durable workflow file path for a project directory name. */
-const workflowFile = (workspace, dir) => path.join(workspace, 'flow-projects', dir, 'workflow.json')
+const workflowFile = (workspace, dir) => path.join(workspace, 'CodeFlow', 'flow-projects', dir, 'workflow.json')
 
 /** Compare host paths regardless of the separator the platform uses. */
 const normalizePath = (value) => String(value ?? '').split('\\').join('/')
@@ -149,7 +149,7 @@ const normalizePath = (value) => String(value ?? '').split('\\').join('/')
 /** List `*.bad-*` quarantine files in a project directory (empty when none). */
 async function quarantineFiles(workspace, dir) {
   try {
-    const entries = await readdir(path.join(workspace, 'flow-projects', dir))
+    const entries = await readdir(path.join(workspace, 'CodeFlow', 'flow-projects', dir))
     return entries.filter((name) => name.startsWith('workflow.json.bad-'))
   } catch {
     return []
@@ -179,7 +179,7 @@ await check('junk names and the bucket share one durable directory', async () =>
     const store = createStore(console)
     const first = await store.write(graphFor('..'), { persist: 'now', cwd: workspace })
     assert.equal(first.key, UNTITLED_KEY)
-    assert.ok(normalizePath(first.file).endsWith('/flow-projects/untitled/workflow.json'), first.file)
+    assert.ok(normalizePath(first.file).endsWith('/CodeFlow/flow-projects/untitled/workflow.json'), first.file)
     // Writing through a different unusable spelling reaches the same state.
     const second = await store.write(graphFor('   '), { persist: 'now', cwd: workspace })
     assert.equal(second.key, UNTITLED_KEY)
@@ -194,13 +194,13 @@ await check('junk names and the bucket share one durable directory', async () =>
 await check('sidecar and undo roots follow the same directory mapping', async () => {
   const workspace = await makeWorkspace('codeflow-b9b-')
   try {
-    assert.equal(sessionSidecarPath(workspace, '..'), path.join(workspace, 'flow-projects', 'untitled', 'session.json'))
-    assert.equal(sessionSidecarPath(workspace, 'real-project'), path.join(workspace, 'flow-projects', 'real-project', 'session.json'))
+    assert.equal(sessionSidecarPath(workspace, '..'), path.join(workspace, 'CodeFlow', 'flow-projects', 'untitled', 'session.json'))
+    assert.equal(sessionSidecarPath(workspace, 'real-project'), path.join(workspace, 'CodeFlow', 'flow-projects', 'real-project', 'session.json'))
     const store = createStore(console)
     store.bindCwd('..', workspace)
     const undo = createUndoManager({ store, logger: console })
     const resolved = await undo.resolveRoot('..')
-    assert.equal(resolved.root, path.join(workspace, 'flow-projects', 'untitled'))
+    assert.equal(resolved.root, path.join(workspace, 'CodeFlow', 'flow-projects', 'untitled'))
   } finally {
     await rm(workspace, { recursive: true, force: true })
   }
@@ -414,7 +414,7 @@ console.log('\n[B4 corrupt files are quarantined, never served as empty]')
 await check('store.load quarantines a half-written file and reports degraded', async () => {
   const workspace = await makeWorkspace('codeflow-b4-')
   try {
-    const dir = path.join(workspace, 'flow-projects', 'corrupt-demo')
+    const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'corrupt-demo')
     await mkdir(dir, { recursive: true })
     const file = path.join(dir, 'workflow.json')
     await writeFile(file, '{"graph":', 'utf8') // exactly the field report's truncation
@@ -440,7 +440,7 @@ await check('store.load quarantines a half-written file and reports degraded', a
 await check('valid JSON that is not a graph is quarantined too', async () => {
   const workspace = await makeWorkspace('codeflow-b4b-')
   try {
-    const dir = path.join(workspace, 'flow-projects', 'notagraph')
+    const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'notagraph')
     await mkdir(dir, { recursive: true })
     const file = path.join(dir, 'workflow.json')
     await writeFile(file, '[1,2,3]', 'utf8')
@@ -455,7 +455,7 @@ await check('valid JSON that is not a graph is quarantined too', async () => {
 await check('the boot payload and /api/state both carry degraded', async () => {
   const workspace = await makeWorkspace('codeflow-b4c-')
   try {
-    const dir = path.join(workspace, 'flow-projects', 'boot-degraded')
+    const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'boot-degraded')
     await mkdir(dir, { recursive: true })
     await writeFile(path.join(dir, 'workflow.json'), '{broken', 'utf8')
     const handler = buildRouter(createStore(console), workspace)
@@ -475,7 +475,7 @@ await check('the boot payload and /api/state both carry degraded', async () => {
 await check('a save against a never-loaded corrupt file quarantines first (backstop)', async () => {
   const workspace = await makeWorkspace('codeflow-b4d-')
   try {
-    const dir = path.join(workspace, 'flow-projects', 'backstop-demo')
+    const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'backstop-demo')
     await mkdir(dir, { recursive: true })
     const file = path.join(dir, 'workflow.json')
     await writeFile(file, '{"half":', 'utf8')
@@ -497,7 +497,7 @@ await check('a save against a never-loaded corrupt file quarantines first (backs
 await check('the tool refuses mode="load" on a quarantined file and warns on read', async () => {
   const workspace = await makeWorkspace('codeflow-b4e-')
   try {
-    const dir = path.join(workspace, 'flow-projects', 'tool-load')
+    const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'tool-load')
     await mkdir(dir, { recursive: true })
     await writeFile(path.join(dir, 'workflow.json'), '{"nope":', 'utf8')
     const store = createStore(console)
@@ -534,7 +534,7 @@ await check('concurrent flushes serialize and the file always ends at the newest
     const onDisk = JSON.parse(await readFile(workflowFile(workspace, 'serial'), 'utf8'))
     assert.equal(onDisk.rev, store.get('serial').rev, 'no older revision landed last')
     assert.equal(onDisk.rev, written.rev, 'flush does not bump rev')
-    const entries = await readdir(path.join(workspace, 'flow-projects', 'serial'))
+    const entries = await readdir(path.join(workspace, 'CodeFlow', 'flow-projects', 'serial'))
     assert.deepEqual(entries.filter((name) => name.includes('.tmp')), [], 'no temp file left behind')
   } finally {
     await rm(workspace, { recursive: true, force: true })
@@ -582,6 +582,194 @@ await check('overlapping writes each answer with their own revision and graph', 
     await rm(workspace, { recursive: true, force: true })
   }
 })
+
+/* ====================================================================== */
+/* v1.0 回归（任务书 5.2）：B 生成物 / A 回合对账+重试 / C 旧目录迁移      */
+/* ====================================================================== */
+
+console.log('\n[v1.0 B — generated canvas first element]')
+await check('port-canvas output never repeats the comment terminator (the v0.6.x top gap)', async () => {
+  // v0.6.x：replaceRange 保留 endMarker，header 替换结尾又自带 '-->'，生成物第 6 行
+  // 变成 '-->-->'，浏览器把它渲染成一条 ~22px 的正文空隙（字段报告的截图现场）。
+  const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const canvas = readFileSync(path.join(repoRoot, 'assets', 'canvas', 'canvas.html'), 'utf8')
+  assert.ok(!canvas.includes('-->-->'), 'duplicated terminator must never come back')
+  assert.ok(canvas.startsWith('<!--'))
+  const headerEnd = canvas.indexOf('-->')
+  const firstElement = canvas.slice(headerEnd + 3).replace(/^\s+/, '')
+  assert.ok(firstElement.startsWith('<div id="codeflow-canvas"'), `got: ${firstElement.slice(0, 40)}`)
+})
+
+console.log('\n[v1.0 A — turn/end reconciliation + retry]')
+{
+  /** A full fake Cordis context (apply() needs on/effect/agents/webServer). */
+  function fakeFullContext(services = {}) {
+    const recorded = { tools: [], routes: [], agents: new Map(), listeners: new Map() }
+    const ctx = {
+      logger: console,
+      effects: [],
+      effect(factory) { const d = factory(); if (typeof d === 'function') ctx.effects.push(d) },
+      on(name, cb) { const l = recorded.listeners.get(name) ?? []; l.push(cb); recorded.listeners.set(name, l); return () => {} },
+      get(name) {
+        if (Object.hasOwn(services, name)) return services[name]
+        if (name === 'agents') return { get: (id) => recorded.agents.get(id), roots: () => [...recorded.agents.values()] }
+        return undefined
+      },
+      inject(names, cb) { cb(ctx) },
+      skills: { registerProvider() { return () => {} } },
+      commands: { register() { return () => {} } },
+      tools: { register(d) { recorded.tools.push(d); return () => {} } },
+      webServer: { register(r) { recorded.routes.push(r); return () => {} } },
+    }
+    return { ctx, recorded }
+  }
+  /** Fire one recorded host event at every listener. */
+  async function emit(recorded, name, ...args) {
+    for (const callback of recorded.listeners.get(name) ?? []) await callback(...args)
+  }
+  function fakeAgent(id, cwd) {
+    return { id, session: { header: { cwd } }, followup() {} }
+  }
+  function fakeSessionController() {
+    const state = { created: [], prompts: [] }
+    return {
+      state,
+      async create(r) { const id = `sess-${state.created.length + 1}`; state.created.push({ id, cwd: r.cwd }); return { sessionId: id } },
+      async rename() { return { title: 'x', seq: 1 } },
+      async prompt(r) { state.prompts.push(r); return { accepted: true } },
+    }
+  }
+
+  await check('a turn that ends without progress fails the pending node and records a retryable issue', async () => {
+    const controller = fakeSessionController()
+    const { ctx, recorded } = fakeFullContext({ sessionController: controller })
+    const workspace = await makeWorkspace('codeflow-v07-a-')
+    try {
+      recorded.agents.set('s-recon', fakeAgent('s-recon', workspace))
+      const { apply } = await import('../lib/index.js')
+      apply(ctx)
+      const handler = recorded.routes[0].handler
+      const graph = {
+        format: 'codeflow/1', rev: 0,
+        project: { name: 'recon-demo', language: 'python', origin: 'new' },
+        nodes: [{ id: 't6', type: 'testrun', title: '测试运行', params: { cmd: 'python -m unittest discover -s tests -v' }, status: 'pending', result: '', detail: '' }],
+        links: [], meta: {},
+      }
+      const res = fakeResponse()
+      await handler(fakeRequest('POST', '/codeflow/api/action', {
+        action: 'RUN_NODE', graph, view: 'tasks', nodeId: 't6', rerun: false, title: '测试运行',
+      }), res)
+      assert.equal(res.statusCode, 200, res.body)
+      // The field report's exact failure: the agent replies and ends its turn
+      // without executing anything — the node must not stay pending forever.
+      await emit(recorded, 'session/event', { id: controller.state.created[0].id }, {
+        type: 'turn/end', seq: 1, data: { turn: 1, reason: 'end_turn' },
+      })
+      const read = fakeResponse()
+      await handler(fakeRequest('GET', '/codeflow/api/state?project=recon-demo&view=tasks'), read)
+      const node = JSON.parse(read.body).graph.nodes.find((entry) => entry.id === 't6')
+      assert.equal(node.status, 'failed', 'the abandoned node is failed, not silently pending')
+      assert.equal(node.result, 'agent 未执行该节点')
+      assert.ok(node.detail.includes('重试'), 'the detail is actionable')
+      // The activity read model carries the issue for the banner + retry button.
+      const act = fakeResponse()
+      await handler(fakeRequest('GET', '/codeflow/api/activity?project=recon-demo'), act)
+      const issue = JSON.parse(act.body).issue
+      assert.ok(issue !== null && typeof issue === 'object', 'the activity carries the issue')
+      assert.equal(issue.nodeId, 't6')
+      assert.equal(issue.retry, true)
+      assert.ok(issue.text.includes('未被执行'), issue.text)
+      // 点「重试」= 对该节点 rerun=true 再发一次运行请求。
+      const res2 = fakeResponse()
+      await handler(fakeRequest('POST', '/codeflow/api/action', {
+        action: 'RUN_NODE', graph, view: 'tasks', nodeId: 't6', rerun: true, title: '重试测试运行',
+      }), res2)
+      assert.equal(res2.statusCode, 200, res2.body)
+      const firstLine = controller.state.prompts[1].content[0].text.split('\n')[0]
+      const payload = JSON.parse(firstLine.slice(firstLine.indexOf(']') + 1))
+      assert.equal(payload.rerun, true, 'the retry re-delivers with rerun=true')
+      assert.equal(payload.node.params.cmd, 'python -m unittest discover -s tests -v', 'the retry stays self-contained')
+      // 新的运行清空上一次的 issue（画布横幅随之消失）。
+      const act2 = fakeResponse()
+      await handler(fakeRequest('GET', '/codeflow/api/activity?project=recon-demo'), act2)
+      assert.equal(JSON.parse(act2.body).issue, null, 'a new run clears the stale issue')
+      // 后台链（undo.finishRun / 快照落盘）是 fire-and-forget：等一拍再清理；
+      // rm 自带重试，吸收 Windows 上与未完成 rename 的竞态（ENOTEMPTY）。
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    } finally {
+      await rm(workspace, { recursive: true, force: true, maxRetries: 8, retryDelay: 120 }).catch(() => {})
+    }
+  })
+}
+
+console.log('\n[v1.0 C — legacy migration]')
+{
+  const { migrateLegacy, migrationNotice } = await import('../lib/paths.js')
+  await check('legacy flow-projects/ projects migrate into CodeFlow/flow-projects/ once', async () => {
+    const workspace = await makeWorkspace('codeflow-v07-mig-')
+    try {
+      const legacy = path.join(workspace, 'flow-projects', 'todo-cli')
+      await mkdir(legacy, { recursive: true })
+      await writeFile(path.join(legacy, 'workflow.json'), '{"format":"codeflow/1"}', 'utf8')
+      await mkdir(path.join(legacy, '.undo'), { recursive: true })
+      await writeFile(path.join(legacy, '.undo', 'keep.txt'), 'undo history moves with the project', 'utf8')
+      const report = await migrateLegacy(workspace)
+      assert.deepEqual(report.moved, ['todo-cli'])
+      assert.ok(report.conflicts.length === 0 && report.failed.length === 0, JSON.stringify(report))
+      const movedFile = path.join(workspace, 'CodeFlow', 'flow-projects', 'todo-cli', 'workflow.json')
+      assert.ok((await stat(movedFile)).isFile(), 'the project lives in the new root')
+      assert.ok((await stat(path.join(workspace, 'CodeFlow', 'flow-projects', 'todo-cli', '.undo', 'keep.txt'))).isFile(), '.undo travels with the project')
+      assert.ok(!(await readdir(path.join(workspace, 'flow-projects'))).includes('todo-cli'), 'the legacy directory is gone')
+      const mig = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'migration.json'), 'utf8'))
+      assert.deepEqual(mig.moved, ['todo-cli'], 'the report names the moved projects')
+      // 幂等：第二次什么都不搬、不报错。
+      const again = await migrateLegacy(workspace)
+      assert.equal(again.moved.length + again.conflicts.length + again.failed.length, 0, 'the second run is a no-op')
+      assert.ok(migrationNotice(report).includes('已迁移 1 个项目'), 'the banner names the count')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+  await check('a project whose target already exists is never overwritten (conflict keeps both)', async () => {
+    const workspace = await makeWorkspace('codeflow-v07-conf-')
+    try {
+      const legacy = path.join(workspace, 'flow-projects', 'keep')
+      await mkdir(legacy, { recursive: true })
+      await writeFile(path.join(legacy, 'workflow.json'), '{"format":"codeflow/1","rev":1}', 'utf8')
+      const target = path.join(workspace, 'CodeFlow', 'flow-projects', 'keep')
+      await mkdir(target, { recursive: true })
+      await writeFile(path.join(target, 'workflow.json'), '{"format":"codeflow/1","rev":99}', 'utf8')
+      const report = await migrateLegacy(workspace)
+      assert.deepEqual(report.conflicts, ['keep'], 'the collision is reported by name')
+      assert.equal(report.moved.length, 0)
+      const onDisk = await readFile(path.join(target, 'workflow.json'), 'utf8')
+      assert.ok(onDisk.includes('"rev":99'), 'the existing target content is untouched')
+      assert.ok((await stat(path.join(legacy, 'workflow.json'))).isFile(), 'the legacy copy is kept (nothing lost)')
+      assert.ok(migrationNotice(report).includes('keep'), 'the banner names the conflict')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+  await check('a failed migration keeps the legacy directory and records the reason', async () => {
+    const workspace = await makeWorkspace('codeflow-v07-fail-')
+    try {
+      // 让目标根建不出来：把 <ws>/CodeFlow/flow-projects 占位成一个文件 → mkdir 失败。
+      const legacy = path.join(workspace, 'flow-projects', 'stuck')
+      await mkdir(legacy, { recursive: true })
+      await writeFile(path.join(legacy, 'workflow.json'), '{"format":"codeflow/1"}', 'utf8')
+      await mkdir(path.join(workspace, 'CodeFlow'), { recursive: true })
+      await writeFile(path.join(workspace, 'CodeFlow', 'flow-projects'), 'not a directory', 'utf8')
+      const report = await migrateLegacy(workspace)
+      assert.equal(report.moved.length, 0)
+      assert.equal(report.failed.length, 1, JSON.stringify(report))
+      assert.equal(report.failed[0].name, 'stuck')
+      assert.ok(report.failed[0].error.length > 0)
+      assert.ok((await stat(path.join(legacy, 'workflow.json'))).isFile(), 'the legacy directory is preserved (no data loss)')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+}
 
 console.log('\n[summary]')
 if (failures.length > 0) {

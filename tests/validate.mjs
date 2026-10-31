@@ -172,6 +172,20 @@ function normalizePath(value) {
   return String(value ?? '').split('\\').join('/')
 }
 
+/**
+ * Parse a `[CodeFlow:*]` prompt per the v1.0 contract: the first line is the
+ * prefix plus a single-line JSON payload; everything after it is the host's
+ * 「本次执行要求」 requirements footer (RUN_* only).
+ */
+function parsePrompt(text) {
+  const newline = text.indexOf('\n')
+  const firstLine = newline === -1 ? text : text.slice(0, newline)
+  return {
+    payload: JSON.parse(firstLine.slice(firstLine.indexOf(']') + 1)),
+    requirements: newline === -1 ? '' : text.slice(newline + 1),
+  }
+}
+
 /** A recording agent stub: `followup` is the only method this plugin calls. */
 function fakeAgent(id, sink, cwd = path.join(tmpdir(), 'codeflow-fake-cwd')) {
   // The default cwd deliberately does not exist: workspace resolution skips
@@ -199,6 +213,10 @@ const { analyzeModules } = await import('../lib/analyst.js')
 const { importProjectDual } = await import('../lib/duo.js')
 const { cleanPathInput, findDirectory, ensureAgentDirectory } = await import('../lib/workspace.js')
 const { buildStarterGraph } = await import('../lib/starter.js')
+const {
+  defaultRoot, ensureLayout, listProjectDirs, pluginRoot, projectDir, readConfig,
+  validateConfiguredDir, writeConfig,
+} = await import('../lib/paths.js')
 
 /* A small deterministic fixture the import checks scan. */
 const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'codeflow-fixture-'))
@@ -314,8 +332,8 @@ console.log('\n[dual view store]')
       assert.equal(store.get('dual-demo', 'modules').rev, 2, 'a modules write bumps only the modules rev')
       assert.equal(store.get('dual-demo', 'tasks').rev, 1, 'the tasks rev is untouched')
       assert.equal(store.get('dual-demo', 'tasks').graph.nodes[0].id, 't1')
-      const tasksOnDisk = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'dual-demo', 'workflow.json'), 'utf8'))
-      const modulesOnDisk = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'dual-demo', 'workflow.modules.json'), 'utf8'))
+      const tasksOnDisk = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'dual-demo', 'workflow.json'), 'utf8'))
+      const modulesOnDisk = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'dual-demo', 'workflow.modules.json'), 'utf8'))
       assert.equal(tasksOnDisk.rev, 1, 'the tasks file never sees the modules rev')
       assert.equal(modulesOnDisk.rev, 2)
       assert.equal(modulesOnDisk.meta.strategy, 'modules')
@@ -346,7 +364,7 @@ console.log('\n[dual view store]')
       assert.equal(tasksWritten.view, 'tasks', 'the active/default view hosts plain graphs')
     })
     await check('legacy single-module project: workflow.json serves the modules view', async () => {
-      const dir = path.join(workspace, 'flow-projects', 'legacy-mod')
+      const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'legacy-mod')
       await mkdir(dir, { recursive: true })
       const legacy = {
         format: 'codeflow/1', rev: 5,
@@ -364,7 +382,7 @@ console.log('\n[dual view store]')
       // Writing the modules view maps to workflow.json — never renamed, never copied.
       const written = await store.write(legacy, { persist: 'now', cwd: workspace, view: 'modules' })
       assert.equal(written.rev, 6)
-      assert.equal(normalizePath(written.file).endsWith('/flow-projects/legacy-mod/workflow.json'), true, written.file)
+      assert.equal(normalizePath(written.file).endsWith('/CodeFlow/flow-projects/legacy-mod/workflow.json'), true, written.file)
       const hasModulesFile = await readFile(path.join(dir, 'workflow.modules.json'), 'utf8').then(() => true, () => false)
       assert.equal(hasModulesFile, false, 'the legacy file is not duplicated')
       // And the tasks view is refused rather than silently created on top of it.
@@ -375,7 +393,7 @@ console.log('\n[dual view store]')
       )
     })
     await check('a corrupt modules file degrades only the modules view', async () => {
-      const dir = path.join(workspace, 'flow-projects', 'iso-demo')
+      const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'iso-demo')
       await mkdir(dir, { recursive: true })
       await writeFile(path.join(dir, 'workflow.json'), JSON.stringify(tasksGraph(3)), 'utf8')
       await writeFile(path.join(dir, 'workflow.modules.json'), '{"broken"', 'utf8')
@@ -394,7 +412,7 @@ console.log('\n[dual view store]')
       await store.write(modulesGraph(), { persist: 'now', cwd: workspace, view: 'modules' })
       const switched = await store.setActiveView('dual-demo', 'modules')
       assert.equal(switched.activeView, 'modules')
-      const sidecar = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'dual-demo', 'view.json'), 'utf8'))
+      const sidecar = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'dual-demo', 'view.json'), 'utf8'))
       assert.equal(sidecar.activeView, 'modules')
       // A cold store adopts the persisted choice.
       const cold = createStore(console)
@@ -411,8 +429,8 @@ console.log('\n[dual view store]')
       store.patchNode('dual-demo', 'm1', { status: 'running' }, { view: 'modules' })
       const flushed = await store.flush('dual-demo')
       assert.equal(flushed.persisted, true, 'both views reached the disk')
-      const tasksOnDisk = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'dual-demo', 'workflow.json'), 'utf8'))
-      const modulesOnDisk = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'dual-demo', 'workflow.modules.json'), 'utf8'))
+      const tasksOnDisk = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'dual-demo', 'workflow.json'), 'utf8'))
+      const modulesOnDisk = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'dual-demo', 'workflow.modules.json'), 'utf8'))
       assert.equal(tasksOnDisk.nodes[0].status, 'done')
       assert.equal(modulesOnDisk.nodes[0].status, 'running')
       assert.equal(flushed.views.tasks.file.includes('workflow.json'), true)
@@ -631,9 +649,9 @@ console.log('\n[dual import]')
       try {
         const code = await importerMain([fixtureRoot, '--out', out])
         assert.equal(code, 0)
-        const dirs = await readdir(path.join(out, 'flow-projects'))
+        const dirs = await readdir(path.join(out, 'CodeFlow', 'flow-projects'))
         assert.equal(dirs.length, 1)
-        const dir = path.join(out, 'flow-projects', dirs[0])
+        const dir = path.join(out, 'CodeFlow', 'flow-projects', dirs[0])
         const tasksDisk = JSON.parse(await readFile(path.join(dir, 'workflow.json'), 'utf8'))
         const modulesDisk = JSON.parse(await readFile(path.join(dir, 'workflow.modules.json'), 'utf8'))
         assert.equal(tasksDisk.meta.strategy, 'tasks')
@@ -643,8 +661,8 @@ console.log('\n[dual import]')
         const out2 = await mkdtemp(path.join(tmpdir(), 'codeflow-cli2-'))
         try {
           await importerMain([fixtureRoot, '--out', out2, '--modules'])
-          const dirs2 = await readdir(path.join(out2, 'flow-projects'))
-          const dir2 = path.join(out2, 'flow-projects', dirs2[0])
+          const dirs2 = await readdir(path.join(out2, 'CodeFlow', 'flow-projects'))
+          const dir2 = path.join(out2, 'CodeFlow', 'flow-projects', dirs2[0])
           const modules2 = JSON.parse(await readFile(path.join(dir2, 'workflow.modules.json'), 'utf8'))
           assert.equal(modules2.meta.strategy, 'modules', '--modules no longer means modules-only')
           assert.ok(await readFile(path.join(dir2, 'workflow.json'), 'utf8').then(() => true, () => false), 'the task pipeline is still written')
@@ -816,7 +834,7 @@ await check('render writes state, bumps rev and persists under the workspace', a
   assert.equal(value.project, 'demo')
   assert.equal(value.rev, 1)
   assert.equal(value.summary, '2 个节点 · 1 完成 · 1 待运行')
-  assert.ok(normalizePath(value.file).endsWith('/flow-projects/demo/workflow.json'), value.file)
+  assert.ok(normalizePath(value.file).endsWith('/CodeFlow/flow-projects/demo/workflow.json'), value.file)
 })
 await check('read returns the live graph', async () => {
   const value = await tool.execute({ mode: 'read', project: 'demo' }, { agent: fakeAgent('s-render', []) })
@@ -875,7 +893,7 @@ console.log('\n[view-aware tool]')
         nodes: [{ id: 'm1', type: 'module', pos: [0, 0], params: { path: '/x.py', symbol: '' }, status: 'pending', result: '', detail: '' }],
         links: [], meta: { importedFrom: viewWorkspace, strategy: 'modules' },
       }, { persist: 'now', cwd: viewWorkspace, view: 'modules' })
-      const tasksFile = path.join(viewWorkspace, 'flow-projects', 'view-demo', 'workflow.json')
+      const tasksFile = path.join(viewWorkspace, 'CodeFlow', 'flow-projects', 'view-demo', 'workflow.json')
       const onDisk = JSON.parse(await readFile(tasksFile, 'utf8'))
       onDisk.nodes[0].status = 'done'
       onDisk.nodes[0].result = '磁盘上的修改'
@@ -892,7 +910,7 @@ console.log('\n[view-aware tool]')
       store.patchNode('view-demo', 'm1', { status: 'running' }, { view: 'modules' })
       const value = await viewTool.execute({ mode: 'save', project: 'view-demo' }, {})
       assert.equal(value.persisted, true)
-      const modulesOnDisk = JSON.parse(await readFile(path.join(viewWorkspace, 'flow-projects', 'view-demo', 'workflow.modules.json'), 'utf8'))
+      const modulesOnDisk = JSON.parse(await readFile(path.join(viewWorkspace, 'CodeFlow', 'flow-projects', 'view-demo', 'workflow.modules.json'), 'utf8'))
       assert.equal(modulesOnDisk.nodes[0].status, 'running', 'the modules view reached the disk too')
     })
   } finally {
@@ -990,7 +1008,7 @@ await check('a canvas gesture is delivered only to the project’s dedicated ses
   assert.equal(controller.state.prompts.length, 1)
   const text = controller.state.prompts[0].content[0].text
   assert.ok(text.startsWith('[CodeFlow:RUN_NODE]'), text)
-  const payload = JSON.parse(text.slice(text.indexOf(']') + 1))
+  const payload = parsePrompt(text).payload
   assert.equal(payload.project, 'dedi')
   assert.equal(payload.nodeId, 'n1')
   assert.equal(sink.length, 0, 'no other session is woken')
@@ -1019,15 +1037,150 @@ await check('a RUN_NODE on the modules view quotes the modules graphPath and tag
     assert.equal(res.statusCode, 200, res.body)
     const text = controller.state.prompts[0].content[0].text
     assert.ok(text.startsWith('[CodeFlow:RUN_NODE]'), text)
-    const payload = JSON.parse(text.slice(text.indexOf(']') + 1))
+    const payload = parsePrompt(text).payload
     assert.equal(payload.view, 'modules', 'the prompt names the view')
-    assert.ok(normalizePath(payload.graphPath).endsWith('/flow-projects/run-mod/workflow.modules.json'), payload.graphPath)
+    assert.ok(normalizePath(payload.graphPath).endsWith('/CodeFlow/flow-projects/run-mod/workflow.modules.json'), payload.graphPath)
     // The manifest records the run's view so the undo restore touches only it.
-    const undoDirs = await readdir(path.join(modulesWorkspace, 'flow-projects', 'run-mod', '.undo'))
-    const manifest = JSON.parse(await readFile(path.join(modulesWorkspace, 'flow-projects', 'run-mod', '.undo', undoDirs[0], 'manifest.json'), 'utf8'))
+    const undoDirs = await readdir(path.join(modulesWorkspace, 'CodeFlow', 'flow-projects', 'run-mod', '.undo'))
+    const manifest = JSON.parse(await readFile(path.join(modulesWorkspace, 'CodeFlow', 'flow-projects', 'run-mod', '.undo', undoDirs[0], 'manifest.json'), 'utf8'))
     assert.equal(manifest.view, 'modules')
   } finally {
     await rm(modulesWorkspace, { recursive: true, force: true })
+  }
+})
+
+console.log('\n[v1.0 self-contained run requests (A3.1/A3.3)]')
+await check('a RUN_NODE prompt is self-contained: node/upstream/cwd/expect + requirements footer', async () => {
+  const sink = []
+  const controller = fakeSessionController()
+  const withController = fakeContext({ sessionController: controller })
+  const runWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-run-self-'))
+  try {
+    withController.recorded.agents.set('s-run-self', fakeAgent('s-run-self', sink, runWorkspace))
+    apply(withController.ctx)
+    const handler2 = withController.recorded.routes[0].handler
+    async function ask(method, url, body) {
+      const r = fakeResponse()
+      await handler2(fakeRequest(method, url, body), r)
+      return { status: r.statusCode, json: r.body.startsWith('{') ? JSON.parse(r.body) : undefined }
+    }
+    const runGraph = {
+      format: 'codeflow/1', rev: 0,
+      project: { name: 'run-self', language: 'python', origin: 'new' },
+      nodes: [
+        { id: 't1', type: 'testgen', title: '测试生成', status: 'done', result: `1 个测试文件，约 6 个用例${'x'.repeat(150)}`, detail: '' },
+        { id: 't2', type: 'testrun', title: '测试运行', params: { cmd: 'python -m unittest discover -s tests -v' }, status: 'pending', result: '', detail: '' },
+      ],
+      links: [['t1', 0, 't2', 0]],
+      meta: {},
+    }
+    const res = await ask('POST', '/codeflow/api/action', {
+      action: 'RUN_NODE', graph: runGraph, view: 'tasks', nodeId: 't2', rerun: false, title: '测试运行',
+    })
+    assert.equal(res.status, 200, JSON.stringify(res.json))
+    const text = controller.state.prompts[0].content[0].text
+    const { payload, requirements } = parsePrompt(text)
+    // 首行仍是单行 JSON 且可 JSON.parse（parsePrompt 的存在即证明）；node/params 原样随行。
+    assert.equal(payload.action, 'RUN_NODE')
+    assert.equal(payload.node.type, 'testrun', 'the prompt carries the node type')
+    assert.equal(payload.node.title, '测试运行')
+    assert.equal(payload.node.params.cmd, 'python -m unittest discover -s tests -v', 'params ride along, cmd included')
+    assert.equal(payload.upstream.length, 1, 'direct upstreams ride along')
+    assert.equal(payload.upstream[0].id, 't1')
+    assert.equal(payload.upstream[0].status, 'done')
+    assert.ok(payload.upstream[0].result.length <= 120, 'upstream results are clipped to 120 chars')
+    assert.equal(
+      normalizePath(payload.cwd),
+      normalizePath(path.join(runWorkspace, 'CodeFlow', 'flow-projects', 'run-self')),
+      'cwd is the project root (not the workspace root)',
+    )
+    assert.ok(payload.expect.includes('真实执行'), 'the acceptance line rides along')
+    // JSON 之后的正文：三行执行要求。
+    assert.ok(requirements.includes('本次执行要求（必须遵守）：'), requirements)
+    assert.ok(requirements.includes('不得以「之前已经跑过/已经通过」为理由跳过'), requirements)
+    assert.ok(requirements.includes('nodeId=t2'), requirements)
+    assert.ok(requirements.includes('宿主会把该节点标记为失败'), requirements)
+    // A3.3：投递成功后目标节点立即 running（面板 ≤1 个轮询周期内可见）。
+    const state = await ask('GET', '/codeflow/api/state?project=run-self&view=tasks')
+    const t2 = state.json.graph.nodes.find((node) => node.id === 't2')
+    assert.equal(t2.status, 'running', 'the target node flips to running right after delivery')
+    // 响应带的是 store 的最新 rev（含乐观置 running 的那一次 bump）。
+    assert.equal(state.json.rev, res.json.rev, 'the action response rev matches the store')
+  } finally {
+    await rm(runWorkspace, { recursive: true, force: true })
+  }
+})
+await check('a failed delivery rolls the optimistic running back to the previous status', async () => {
+  const sink = []
+  const controller = fakeSessionController()
+  controller.state.failNextPrompt = new Error('session exploded')
+  const withController = fakeContext({ sessionController: controller })
+  const failWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-run-fail-'))
+  try {
+    withController.recorded.agents.set('s-run-fail', fakeAgent('s-run-fail', sink, failWorkspace))
+    apply(withController.ctx)
+    const handler2 = withController.recorded.routes[0].handler
+    async function ask(method, url, body) {
+      const r = fakeResponse()
+      await handler2(fakeRequest(method, url, body), r)
+      return { status: r.statusCode, json: r.body.startsWith('{') ? JSON.parse(r.body) : undefined }
+    }
+    const runGraph = {
+      format: 'codeflow/1', rev: 0,
+      project: { name: 'run-fail', language: 'python', origin: 'new' },
+      nodes: [{ id: 't2', type: 'testrun', title: '测试运行', params: { cmd: 'echo hi' }, status: 'pending', result: '', detail: '' }],
+      links: [], meta: {},
+    }
+    const res = await ask('POST', '/codeflow/api/action', {
+      action: 'RUN_NODE', graph: runGraph, view: 'tasks', nodeId: 't2', rerun: false, title: '测试运行',
+    })
+    assert.equal(res.status, 409, 'the delivery failure surfaces as 409')
+    const state = await ask('GET', '/codeflow/api/state?project=run-fail&view=tasks')
+    const t2 = state.json.graph.nodes.find((node) => node.id === 't2')
+    assert.equal(t2.status, 'pending', 'the optimistic running is rolled back (never stuck spinning)')
+  } finally {
+    await rm(failWorkspace, { recursive: true, force: true })
+  }
+})
+await check('RUN_ALL carries the topo order of pending/failed nodes and flips only the first one running', async () => {
+  const sink = []
+  const controller = fakeSessionController()
+  const withController = fakeContext({ sessionController: controller })
+  const allWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-run-all-'))
+  try {
+    withController.recorded.agents.set('s-run-all', fakeAgent('s-run-all', sink, allWorkspace))
+    apply(withController.ctx)
+    const handler2 = withController.recorded.routes[0].handler
+    async function ask(method, url, body) {
+      const r = fakeResponse()
+      await handler2(fakeRequest(method, url, body), r)
+      return { status: r.statusCode, json: r.body.startsWith('{') ? JSON.parse(r.body) : undefined }
+    }
+    const runGraph = {
+      format: 'codeflow/1', rev: 0,
+      project: { name: 'run-all', language: 'python', origin: 'new' },
+      nodes: [
+        { id: 't1', type: 'requirement', title: '需求', status: 'done', result: 'ok', detail: '' },
+        { id: 't2', type: 'codegen', title: '代码生成', status: 'pending', result: '', detail: '' },
+        { id: 't3', type: 'testgen', title: '测试生成', status: 'failed', result: '', detail: '' },
+        { id: 't4', type: 'review', title: '审查', status: 'skipped', result: '', detail: '' },
+      ],
+      links: [['t1', 0, 't2', 0], ['t2', 0, 't3', 0], ['t3', 0, 't4', 0]],
+      meta: {},
+    }
+    const res = await ask('POST', '/codeflow/api/action', { action: 'RUN_ALL', graph: runGraph, view: 'tasks', title: '运行全部' })
+    assert.equal(res.status, 200, JSON.stringify(res.json))
+    const { payload, requirements } = parsePrompt(controller.state.prompts[0].content[0].text)
+    assert.deepEqual(payload.order, ['t2', 't3'], 'order is the topo order of pending/failed nodes only')
+    assert.ok(requirements.includes('order 列出的每个节点'), requirements)
+    const state = await ask('GET', '/codeflow/api/state?project=run-all&view=tasks')
+    const statuses = Object.fromEntries(state.json.graph.nodes.map((node) => [node.id, node.status]))
+    assert.equal(statuses.t2, 'running', 'the first pending node is optimistic-running')
+    assert.equal(statuses.t3, 'failed', 'later nodes keep their status (no whole-graph spin)')
+    assert.equal(statuses.t1, 'done')
+    assert.equal(statuses.t4, 'skipped')
+  } finally {
+    await rm(allWorkspace, { recursive: true, force: true })
   }
 })
 await check('an unbound project without a session controller is refused with an actionable error', async () => {
@@ -1101,7 +1254,7 @@ await check('POST /codeflow/api/save persists without a turn', async () => {
     assert.equal(response.json.ok, true)
     assert.equal(response.json.persisted, true, 'the durable copy really landed')
     assert.equal(sink.length, 0, 'save must not wake the agent')
-    assert.ok(normalizePath(response.json.file).endsWith('/flow-projects/web/workflow.json'), response.json.file)
+    assert.ok(normalizePath(response.json.file).endsWith('/CodeFlow/flow-projects/web/workflow.json'), response.json.file)
   } finally {
     await rm(saveWorkspace, { recursive: true, force: true })
   }
@@ -1191,10 +1344,10 @@ await check('NEW creates the project and queues it in a fresh dedicated session'
   assert.equal(controller.state.prompts.length, 1, 'the NEW turn is queued via the controller')
   const text = controller.state.prompts[0].content[0].text
   assert.ok(text.startsWith('[CodeFlow:NEW]'), text)
-  const payload = JSON.parse(text.slice(text.indexOf(']') + 1))
+  const payload = parsePrompt(text).payload
   assert.equal(payload.action, 'NEW')
   assert.equal(payload.project, 'host-agent')
-  assert.ok(normalizePath(payload.graphPath).endsWith('/flow-projects/host-agent/workflow.json'), payload.graphPath)
+  assert.ok(normalizePath(payload.graphPath).endsWith('/CodeFlow/flow-projects/host-agent/workflow.json'), payload.graphPath)
   assert.equal(sink.length, 0, 'agents are woken by the controller, not directly')
 })
 await check('NEW suffixes a project name that is already taken', async () => {
@@ -1339,6 +1492,32 @@ await check('undo history tags the run view', () => {
 await check('the canvas carries the module node type', () => {
   assert.ok(canvas.includes("module:{label:'模块说明'"), 'TYPES has module')
   assert.ok(canvas.includes('聚焦符号(可选)'), 'module widgets include the symbol focus')
+})
+
+console.log('\n[v1.0 canvas frame fix (B)]')
+await check('the generated canvas has no duplicated comment terminator', () => {
+  // v0.6.x 的顶部空隙：replaceRange 保留 endMarker，header 替换的结尾又带了一个
+  // '-->'，生成物第 6 行变成 '-->-->'，被浏览器当成正文渲染出一条空隙。
+  assert.ok(!canvas.includes('-->-->'), 'the -->--> text node must never come back')
+  assert.ok(canvas.startsWith('<!--'), 'the file opens with the header comment')
+  const headerEnd = canvas.indexOf('-->')
+  assert.ok(headerEnd > 0)
+  const firstElement = canvas.slice(headerEnd + 3).replace(/^\s+/, '')
+  assert.ok(
+    firstElement.startsWith('<div id="codeflow-canvas"'),
+    `first element after the header must be the canvas div, got: ${firstElement.slice(0, 40)}`,
+  )
+})
+await check('the embedded shell strips the canvas frame; the standalone card look survives', async () => {
+  const page = await read('lib/canvas-page.js')
+  assert.ok(
+    page.includes('html body>div#codeflow-canvas{border:0;border-radius:0;width:100%;height:100%;}'),
+    'SHELL_CSS removes the 1px border + 14px radius in embedded mode',
+  )
+  assert.ok(page.includes('html,body{margin:0;padding:0;height:100%;overflow:hidden;'), 'the shell pins html/body')
+  assert.ok(canvas.includes('border-radius:14px'), 'the standalone preview keeps its card look')
+  assert.ok(canvas.includes('cf-tb-settings'), 'the toolbar carries the settings entry')
+  assert.ok(canvas.includes('id="cf-banner-retry"'), 'the banner carries the issue retry button')
 })
 
 console.log('\n[theming]')
@@ -1542,7 +1721,7 @@ await check('a fresh manager adopts the sidecar binding (cold session)', async (
   assert.equal(store.get('sidecar-demo').sessionId, result.sessionId)
 })
 await check('a corrupt sidecar is ignored and replaced by a fresh binding', async () => {
-  await mkdir(path.join(sidecarWorkspace, 'flow-projects', 'broken-demo'), { recursive: true })
+  await mkdir(path.join(sidecarWorkspace, 'CodeFlow', 'flow-projects', 'broken-demo'), { recursive: true })
   await writeFile(sessionSidecarPath(sidecarWorkspace, 'broken-demo'), '{not json', 'utf8')
   const store = createStore(console)
   const controller = fakeSessionController()
@@ -1905,7 +2084,7 @@ console.log('\n[v0.5.0 progress tool]')
 console.log('\n[v0.5.0 undo over HTTP]')
 {
   const undoWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-undo-http-'))
-  const projectDir = path.join(undoWorkspace, 'flow-projects', 'undo-http')
+  const projectDir = path.join(undoWorkspace, 'CodeFlow', 'flow-projects', 'undo-http')
   await mkdir(path.join(projectDir, 'src'), { recursive: true })
   await writeFile(path.join(projectDir, 'src', 'main.py'), 'print("v1")\n', 'utf8')
   const controller = fakeSessionController()
@@ -2074,7 +2253,7 @@ console.log('\n[v0.5.1 load channel]')
     nodes: [{ id: 'n1', type: 'codegen', status: 'pending', result: '', detail: '' }],
     links: [],
   }, { persist: 'now', cwd: loadWorkspace })
-  const graphFile = path.join(loadWorkspace, 'flow-projects', 'load-demo', 'workflow.json')
+  const graphFile = path.join(loadWorkspace, 'CodeFlow', 'flow-projects', 'load-demo', 'workflow.json')
 
   await check('load re-reads the edited workflow.json and bumps rev so the panel adopts it', async () => {
     const file = JSON.parse(await readFile(graphFile, 'utf8'))
@@ -2097,9 +2276,9 @@ console.log('\n[v0.5.1 load channel]')
       format: 'codeflow/1', rev: 0,
       project: { name: 'load-missing' }, nodes: [], links: [],
     }, { persist: 'now', cwd: loadWorkspace })
-    await rm(path.join(loadWorkspace, 'flow-projects', 'load-missing', 'workflow.json'), { force: true })
+    await rm(path.join(loadWorkspace, 'CodeFlow', 'flow-projects', 'load-missing', 'workflow.json'), { force: true })
     await assert.rejects(() => loadTool.execute({ mode: 'load', project: 'load-missing' }, {}), /load/)
-    await writeFile(path.join(loadWorkspace, 'flow-projects', 'load-missing', 'workflow.json'), '{broken json', 'utf8')
+    await writeFile(path.join(loadWorkspace, 'CodeFlow', 'flow-projects', 'load-missing', 'workflow.json'), '{broken json', 'utf8')
     await assert.rejects(() => loadTool.execute({ mode: 'load', project: 'load-missing' }, {}), /load/)
   })
   await check('load without any workspace is an actionable error', async () => {
@@ -2124,6 +2303,123 @@ console.log('\n[v0.5.1 load channel]')
     assert.ok(text.includes('不要把整图 JSON 塞进工具参数'))
   })
   await rm(loadWorkspace, { recursive: true, force: true })
+}
+
+console.log('\n[v1.0 paths & config]')
+{
+  const pathsWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-paths-'))
+  try {
+    await check('paths: the default root is <workspace>/CodeFlow and ensureLayout creates it', async () => {
+      assert.equal(normalizePath(defaultRoot(pathsWorkspace)), normalizePath(path.join(pathsWorkspace, 'CodeFlow')))
+      const layout = await ensureLayout(pathsWorkspace)
+      assert.equal(normalizePath(layout.root), normalizePath(defaultRoot(pathsWorkspace)))
+      const entries = await readdir(path.join(pathsWorkspace, 'CodeFlow'))
+      assert.ok(entries.includes('flow-projects'), 'mkdir -p <root>/flow-projects ran')
+    })
+    await check('paths: a custom root and a per-project override resolve projectDir', async () => {
+      const customRoot = path.join(pathsWorkspace, 'Elsewhere')
+      await writeConfig(pathsWorkspace, { root: customRoot, knownRoots: [], projects: { over: { dir: pathsWorkspace } } })
+      const cfg = await readConfig(pathsWorkspace)
+      assert.equal(normalizePath(cfg.root), normalizePath(customRoot))
+      assert.equal(
+        normalizePath(await projectDir(pathsWorkspace, 'plain')),
+        normalizePath(path.join(customRoot, 'flow-projects', 'plain')),
+      )
+      assert.equal(
+        normalizePath(await projectDir(pathsWorkspace, 'over')),
+        normalizePath(pathsWorkspace),
+        'the override points at the project directory itself',
+      )
+      // 恢复默认根 + 清除覆盖
+      await writeConfig(pathsWorkspace, { root: null, knownRoots: [customRoot], projects: {} })
+      assert.equal(
+        normalizePath(await projectDir(pathsWorkspace, 'plain')),
+        normalizePath(path.join(pathsWorkspace, 'CodeFlow', 'flow-projects', 'plain')),
+      )
+      // knownRoots 里的旧根仍会被扫描到
+      await mkdir(path.join(customRoot, 'flow-projects', 'kept'), { recursive: true })
+      await writeFile(path.join(customRoot, 'flow-projects', 'kept', 'workflow.json'), '{"format":"codeflow/1"}', 'utf8')
+      const scanned = await listProjectDirs(pathsWorkspace)
+      assert.ok(scanned.dirs.has('kept'), 'projects in knownRoots stay listable after a root change')
+    })
+    await check('paths: a corrupt config falls back to the default root without losing projects', async () => {
+      await writeFile(path.join(pathsWorkspace, 'CodeFlow', 'config.json'), '{broken json', 'utf8')
+      const cfg = await readConfig(pathsWorkspace)
+      assert.equal(cfg.root, null, 'root falls back to the default')
+      assert.equal(
+        normalizePath(await projectDir(pathsWorkspace, 'demo')),
+        normalizePath(path.join(pathsWorkspace, 'CodeFlow', 'flow-projects', 'demo')),
+      )
+    })
+    await check('paths: configured dirs must be absolute, directories, and outside the plugin package', async () => {
+      await assert.rejects(() => validateConfiguredDir('relative/path'), /绝对路径/)
+      await assert.rejects(() => validateConfiguredDir(path.join(pathsWorkspace, 'CodeFlow', 'config.json')), /不是目录/)
+      await assert.rejects(() => validateConfiguredDir(pluginRoot()), /插件包目录/)
+      await assert.rejects(() => validateConfiguredDir(path.join(pluginRoot(), 'lib')), /插件包目录/)
+      await assert.rejects(() => validateConfiguredDir(path.join(pathsWorkspace, 'no-such-parent', 'root')), /父目录不存在/)
+      await mkdir(path.join(pathsWorkspace, 'ready-parent'), { recursive: true })
+      const accepted = await validateConfiguredDir(path.join(pathsWorkspace, 'ready-parent', 'root'))
+      assert.ok(normalizePath(accepted).endsWith('ready-parent/root'), 'a missing dir with an existing parent is accepted')
+    })
+    await check('config API: GET reports the effective root; POST sets, rejects and restores it', async () => {
+      const sink = []
+      const controller = fakeSessionController()
+      const cfgCtx = fakeContext({ sessionController: controller })
+      cfgCtx.recorded.agents.set('s-cfg', fakeAgent('s-cfg', sink, pathsWorkspace))
+      apply(cfgCtx.ctx)
+      const handler2 = cfgCtx.recorded.routes[0].handler
+      async function ask(method, url, body) {
+        const r = fakeResponse()
+        await handler2(fakeRequest(method, url, body), r)
+        return { status: r.statusCode, json: r.body.startsWith('{') ? JSON.parse(r.body) : undefined }
+      }
+      const got = await ask('GET', '/codeflow/api/config?project=demo')
+      assert.equal(got.status, 200, JSON.stringify(got.json))
+      assert.equal(normalizePath(got.json.defaultRoot), normalizePath(path.join(pathsWorkspace, 'CodeFlow')))
+      assert.equal(normalizePath(got.json.root), normalizePath(path.join(pathsWorkspace, 'CodeFlow')))
+      assert.equal(
+        normalizePath(got.json.projectDir),
+        normalizePath(path.join(pathsWorkspace, 'CodeFlow', 'flow-projects', 'demo')),
+      )
+      const custom = await mkdtemp(path.join(tmpdir(), 'codeflow-root-'))
+      try {
+        const put = await ask('POST', '/codeflow/api/config', { root: custom })
+        assert.equal(put.status, 200, JSON.stringify(put.json))
+        assert.equal(normalizePath(put.json.root), normalizePath(custom))
+        const again = await ask('GET', '/codeflow/api/config')
+        assert.equal(normalizePath(again.json.root), normalizePath(custom))
+        const relative = await ask('POST', '/codeflow/api/config', { root: 'relative/path' })
+        assert.equal(relative.status, 400, 'relative roots are refused with a Chinese reason')
+        assert.ok(relative.json.error.includes('绝对路径'), relative.json.error)
+        const plugin = await ask('POST', '/codeflow/api/config', { root: pluginRoot() })
+        assert.equal(plugin.status, 409, 'plugin-package roots are refused')
+        assert.ok(plugin.json.error.includes('插件包目录'), plugin.json.error)
+        const reset = await ask('POST', '/codeflow/api/config', { root: null })
+        assert.equal(reset.status, 200)
+        assert.equal(normalizePath(reset.json.root), normalizePath(path.join(pathsWorkspace, 'CodeFlow')), 'root:null restores the default')
+        // 单项目覆盖：设置与清除
+        const overrideDir = await mkdtemp(path.join(tmpdir(), 'codeflow-proj-'))
+        try {
+          const putDir = await ask('POST', '/codeflow/api/config', { project: 'demo', projectDir: overrideDir })
+          assert.equal(putDir.status, 200, JSON.stringify(putDir.json))
+          assert.equal(normalizePath(putDir.json.projectDir), normalizePath(overrideDir))
+          const clearDir = await ask('POST', '/codeflow/api/config', { project: 'demo', projectDir: null })
+          assert.equal(clearDir.status, 200)
+          assert.equal(
+            normalizePath(clearDir.json.projectDir),
+            normalizePath(path.join(pathsWorkspace, 'CodeFlow', 'flow-projects', 'demo')),
+            'projectDir:null clears the override',
+          )
+        } finally {
+          await rm(overrideDir, { recursive: true, force: true })
+        }
+      } finally {
+        await rm(custom, { recursive: true, force: true })
+      }
+    })
+  } finally {
+    await rm(pathsWorkspace, { recursive: true, force: true })
+  }
 }
 
 console.log('\n[summary]')

@@ -9,17 +9,20 @@
 
 ## 1. 画布 → agent
 
-消息前缀之后是一个**单行 JSON 对象**（无空格、无换行）。解析规则：找到第一个 `]`，其后整段 `JSON.parse`。
+消息**首行**是前缀 + 一个**单行 JSON 对象**（无空格、无换行）。解析规则（v1.0 起）：
+找到第一个 `]`，取其后**到行尾**的整段做 `JSON.parse`；**其后的正文是宿主附加的
+「本次执行要求」**，属于硬性规则，必须遵守（见 RUN_NODE/RUN_ALL 一节）。
 
 所有动作都带 `project`、`view`（`tasks` = 任务流水线 / `modules` = 模块结构图）、`rev`，以及 `graphPath`
-（**该视图**权威图的绝对路径，宿主已把它落盘；任务图 = `workflow.json`，模块图 = `workflow.modules.json`）。
+（**该视图**权威图的绝对路径，宿主已把它落盘；任务图 = `workflow.json`，模块图 = `workflow.modules.json`，
+默认在 `<工作区>/CodeFlow/flow-projects/<项目名>/` 下，可在画布「设置」里自定义根目录）。
 **图本身不在消息里**——这样大图不会污染对话，你随时 `read` `graphPath` 拿到用户眼前的精确状态。
 运行只作用于消息所属的视图：另一个视图的图与状态完全不受影响。
 
 ### `[CodeFlow:NEW]` 新建项目
 
 ```json
-{"action":"NEW","project":"todo-cli","view":"tasks","rev":0,"graphPath":"/ws/flow-projects/todo-cli/workflow.json","name":"todo-cli","language":"python","brief":"命令行待办事项工具，支持增删改查与持久化","autoRun":true}
+{"action":"NEW","project":"todo-cli","view":"tasks","rev":0,"graphPath":"/ws/CodeFlow/flow-projects/todo-cli/workflow.json","name":"todo-cli","language":"python","brief":"命令行待办事项工具，支持增删改查与持久化","autoRun":true}
 ```
 
 - `autoRun=true`：用户勾了"生成后自动执行到初版"，把 需求→方案→代码生成→文件写入(→测试生成) 跑完并标 `done`。
@@ -33,15 +36,37 @@
 的手工构造请求保留；万一收到，按 `import-analysis.md` 扫描并推送即可，语义不变：
 
 ```json
-{"action":"IMPORT","project":"legacy-app","rev":0,"graphPath":"/ws/flow-projects/legacy-app/workflow.json","path":"C:/code/legacy-app","depth":4,"fromComments":true,"addTests":true}
+{"action":"IMPORT","project":"legacy-app","rev":0,"graphPath":"/ws/CodeFlow/flow-projects/legacy-app/workflow.json","path":"C:/code/legacy-app","depth":4,"fromComments":true,"addTests":true}
 ```
 
 ### `[CodeFlow:RUN_NODE]` 运行单个节点（含上游）
 
+首行 JSON（v1.0 起自包含——目标节点、直接上游、工作目录都在消息里，不必先读图也能开工）：
+
 ```json
-{"action":"RUN_NODE","project":"todo-cli","view":"modules","rev":7,"graphPath":"/ws/flow-projects/todo-cli/workflow.modules.json","nodeId":"m5","rerun":false,"undoable":true}
+{"action":"RUN_NODE","project":"todo-cli","view":"tasks","rev":7,"graphPath":"/ws/CodeFlow/flow-projects/todo-cli/workflow.json","nodeId":"t6","rerun":false,"undoable":true,"node":{"id":"t6","type":"testrun","title":"测试运行","params":{"cmd":"python -m unittest discover -s tests -v"}},"upstream":[{"id":"t5","type":"testgen","status":"done","result":"1 个测试文件，约 6 个用例"}],"cwd":"/ws/CodeFlow/flow-projects/todo-cli","expect":"在 cwd 下真实执行 params.cmd，并把真实输出统计写进 result；未执行就是失败，不得跳过"}
 ```
 
+JSON 之后宿主会附加一段正文（硬性要求）：
+
+```
+本次执行要求（必须遵守）：
+1. 本次必须真实执行该节点，不得以「之前已经跑过/已经通过」为理由跳过；
+2. 结束前必须用 codeflow_canvas mode="progress" 回填 status/result/detail（nodeId=t6）；
+3. 未执行就结束回合，宿主会把该节点标记为失败。
+```
+
+硬规则（对应正文三条，违反任何一条都算失败）：
+
+- **"同一会话里之前跑过"不算本次执行**：用户点运行就是一次新的执行请求，必须重跑并回填；
+  哪怕你在 NEW 阶段刚跑过同样的命令、结果是通过。
+- **不得只回复不执行**：没有真实工具调用（shell/文件工具/`codeflow_canvas`）的运行回合，宿主会在
+  回合结束时把节点标记为 `failed`，画布上会出现失败原因与「重试」按钮。
+- 每个节点结束时必须 `progress` 置终态（`done`/`failed`）；`running` 不许留到回合结束。
+
+字段说明：`node` = 目标节点（`params` 原样，`cmd` 必带）；`upstream` = 直接上游
+`[{id,type,status,result(≤120字)}]`，可直接当输入上下文；`cwd`（`testrun`/`shell` 才带）= 必须
+执行命令的目录（导入项目 = 源码树，新建项目 = 项目目录）；`expect` = 一句话验收标准。
 `rerun=true`：已完成的节点也重跑。`undoable`：宿主是否已为本次运行创建文件快照（`false` 时带
 `warning` 字段说明原因，需要转告用户"本次运行不可撤销"）。文件快照是项目级的，撤销历史按时间全局
 LIFO（跨视图运行也共用一个"只能撤销最新一次"），但恢复只回滚该次运行所用视图的节点字段。
@@ -49,8 +74,12 @@ LIFO（跨视图运行也共用一个"只能撤销最新一次"），但恢复�
 ### `[CodeFlow:RUN_ALL]` 运行整图
 
 ```json
-{"action":"RUN_ALL","project":"todo-cli","view":"tasks","rev":7,"graphPath":"/ws/flow-projects/todo-cli/workflow.json","undoable":true}
+{"action":"RUN_ALL","project":"todo-cli","view":"tasks","rev":7,"graphPath":"/ws/CodeFlow/flow-projects/todo-cli/workflow.json","undoable":true,"order":["t1","t2","t3","t4","t5","t6","t7"],"cwd":"/ws/CodeFlow/flow-projects/todo-cli","expect":"testrun/shell 节点必须在 cwd 下真实执行命令，并把真实输出写进 result；未执行就是失败，不得跳过"}
 ```
+
+- `order`：本次将执行的节点 id（拓扑序，只含 `pending/failed`；`done` 复用结果、`skipped` 跳过）。
+  按它执行，逐个 `progress` 回填；其后的正文同样是硬性要求。
+- 你点运行后宿主会立刻把第一个待运行节点置为「运行中」，随后由你的 `progress` 接管。
 
 两个 RUN 动作都只会出现在该项目的**画布专用会话**里（每个项目一个，持久绑定；
 标题形如 `CodeFlow · <项目>`）。运行前宿主已对项目源码树做快照（`.undo/`），

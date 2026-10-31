@@ -1,6 +1,6 @@
 {
   "name": "dsh-codeflow-canvas",
-  "version": "0.6.0",
+  "version": "1.0.1",
   "description": "ComfyUI-style coding workflow canvas for DSH: a native sidebar panel renders a node graph where every node is an agent-executable coding task and every link is a dataflow dependency.",
   "type": "module",
   "main": "lib/index.js",

@@ -60,7 +60,7 @@ let rev = 0
   const j = await r.json()
   assert.equal(r.status, 200); assert.equal(j.ok, true); assert.equal(j.persisted, true)
   rev = j.rev
-  const file = path.join(workspace, 'flow-projects', 'e2e-a', 'workflow.json')
+  const file = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-a', 'workflow.json')
   const onDisk = JSON.parse(await readFile(file, 'utf8'))
   assert.equal(onDisk.rev, rev)
   const g = await (await get('/codeflow/api/state?project=e2e-a')).json()
@@ -107,10 +107,10 @@ let rev = 0
   for (const r of responses) if (r.status === 200) revs.push((await r.json()).rev)
   assert.equal(statuses.filter((s) => s === 409).length + revs.length, 10)
   assert.deepEqual(revs.sort((a, b) => a - b), Array.from({ length: revs.length }, (_, i) => i + 1), 'revs contiguous from 1')
-  const file = path.join(workspace, 'flow-projects', 'e2e-conc', 'workflow.json')
+  const file = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-conc', 'workflow.json')
   const onDisk = JSON.parse(await readFile(file, 'utf8'))
   assert.equal(onDisk.rev, Math.max(...revs), 'file holds the newest rev (no rename race)')
-  const entries = await readdir(path.join(workspace, 'flow-projects', 'e2e-conc'))
+  const entries = await readdir(path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-conc'))
   assert.equal(entries.filter((n) => n.includes('.tmp')).length, 0, 'no .tmp leftovers')
   ok(`10 concurrent autosaves → revs ${revs.join(',')} | file rev ${onDisk.rev} | no tmp litter`)
 }
@@ -122,7 +122,7 @@ let rev = 0
   const bodies = await Promise.all(responses.map((r) => r.json()))
   assert.ok(responses.every((r) => r.status === 200))
   assert.ok(bodies.every((b) => b.ok === true && b.persisted === true))
-  const file = path.join(workspace, 'flow-projects', 'e2e-save', 'workflow.json')
+  const file = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-save', 'workflow.json')
   const onDisk = JSON.parse(await readFile(file, 'utf8'))
   assert.equal(onDisk.rev, Math.max(...bodies.map((b) => b.rev)))
   ok('30 concurrent /api/save → 30/30 persisted:true, file parses at newest rev')
@@ -135,7 +135,7 @@ let rev = 0
   const ms = Date.now() - started
   const j = await r.json()
   assert.equal(r.status, 200); assert.equal(j.persisted, true)
-  const file = path.join(workspace, 'flow-projects', 'e2e-big', 'workflow.json')
+  const file = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-big', 'workflow.json')
   const size = (await readFile(file, 'utf8')).length
   assert.ok(size > 100000)
   ok(`2000-node autosave → ${ms}ms, file ${(size / 1024).toFixed(0)}KB persisted`)
@@ -143,7 +143,7 @@ let rev = 0
 
 /* 9. corrupt file: boot degrades, quarantines, and a later save does not destroy it (B4) */
 {
-  const dir = path.join(workspace, 'flow-projects', 'e2e-corrupt')
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-corrupt')
   await mkdir(dir, { recursive: true })
   await writeFile(path.join(dir, 'workflow.json'), '{"format":"codefl', 'utf8')
   const page = await get('/codeflow/canvas?boot=1&project=e2e-corrupt')
@@ -166,7 +166,7 @@ let rev = 0
 
 /* 10. /api/save failure → 507 (B3) */
 {
-  const dir = path.join(workspace, 'flow-projects', 'e2e-507')
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-507')
   await mkdir(path.join(dir), { recursive: true })
   const r1 = await post('/codeflow/api/save', { graph: graph('e2e-507') })
   assert.equal(r1.status, 200)
@@ -187,12 +187,12 @@ let rev = 0
   assert.equal(r1.status, 200)
   assert.equal(j1.project, '__untitled__')
   assert.equal(j1.persisted, true)
-  const bucket = JSON.parse(await readFile(path.join(workspace, 'flow-projects', 'untitled', 'workflow.json'), 'utf8'))
-  assert.equal(bucket.rev, j1.rev, 'the bucket persists at flow-projects/untitled/')
+  const bucket = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'untitled', 'workflow.json'), 'utf8'))
+  assert.equal(bucket.rev, j1.rev, 'the bucket persists at CodeFlow/flow-projects/untitled/')
   const g2 = await (await get('/codeflow/api/state?project=untitled')).json()
   assert.equal(g2.project, '__untitled__', 'literal "untitled" reads the same bucket')
   assert.equal(g2.rev, j1.rev)
-  ok(`".."/"  "/"untitled" all resolve to the __untitled__ bucket at flow-projects/untitled/ (B9)`)
+  ok(`".."/"  "/"untitled" all resolve to the __untitled__ bucket at CodeFlow/flow-projects/untitled/ (B9)`)
 }
 
 /* ---- v0.6.0: dual import, independent views, switch & persistence ---- */
@@ -202,10 +202,13 @@ const dualSrc = path.join(workspace, 'dual-src')
 /** A fresh store + server on the same workspace: a process "restart". */
 const restart = async () => {
   const freshStore = createStore(console)
+  const { migrateLegacy } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'paths.js')).href)
   const freshHandler = createRouter({
     store: freshStore,
     logger: console,
     resolveCwd: async () => workspace,
+    // v1.0：与真实组合一致——boot / 列项目前触发一次幂等的旧目录迁移。
+    migrateWorkspace: (ws) => migrateLegacy(ws),
     submit: async () => ({ sessionId: 'sess-restart' }),
     ensureSession: async () => ({ sessionId: 'sess-restart', created: false }),
   })
@@ -234,7 +237,7 @@ let dualProject = null
   dualProject = j.project
   assert.ok(j.modulesAvailable === true, `module graph must be generated: ${j.warning ?? ''}`)
   assert.ok(j.summary.includes('任务流水线') && j.summary.includes('模块结构图'), j.summary)
-  const dir = path.join(workspace, 'flow-projects', dualProject)
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', dualProject)
   const tasksDisk = JSON.parse(await readFile(path.join(dir, 'workflow.json'), 'utf8'))
   const modulesDisk = JSON.parse(await readFile(path.join(dir, 'workflow.modules.json'), 'utf8'))
   assert.equal(tasksDisk.project.name, modulesDisk.project.name, 'one project name for both views')
@@ -309,7 +312,7 @@ let dualProject = null
 
 /* 15. legacy single-module project: workflow.json IS the modules view */
 {
-  const dir = path.join(workspace, 'flow-projects', 'e2e-legacy-mod')
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-legacy-mod')
   await mkdir(dir, { recursive: true })
   const legacy = { format: 'codeflow/1', rev: 3, project: { name: 'e2e-legacy-mod', origin: 'import' }, nodes: [{ id: 'n1', type: 'module', title: 'm', params: { path: '/x/y.py', symbol: '' }, status: 'pending' }], links: [], meta: { importedFrom: dualSrc, strategy: 'modules' } }
   await writeFile(path.join(dir, 'workflow.json'), JSON.stringify(legacy), 'utf8')
@@ -340,7 +343,7 @@ let dualProject = null
 
 /* 16. corrupt modules file is isolated; the tasks view keeps working */
 {
-  const dir = path.join(workspace, 'flow-projects', dualProject)
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', dualProject)
   await writeFile(path.join(dir, 'workflow.modules.json'), '{"broken"', 'utf8')
   const fresh = await restart()
   try {
@@ -356,6 +359,54 @@ let dualProject = null
     await fresh.close()
   }
   ok('corrupt workflow.modules.json quarantined on a cold load; tasks view untouched')
+}
+
+/* 17. legacy flow-projects/ projects migrate once and boot picks them up (v1.0 C) */
+{
+  // 独立工作区：paths.js 的"每个工作区只迁一次"是进程内 + config 双保险，
+  // 主工作区在场景 12 起的 restart 里已经记过 migratedAt，这里要的是全新升级现场。
+  const migWorkspace = await mkdtemp(path.join(tmpdir(), 'codeflow-e2e-mig-'))
+  const { migrateLegacy } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'paths.js')).href)
+  const migHandler = createRouter({
+    store: createStore(console),
+    logger: console,
+    resolveCwd: async () => migWorkspace,
+    migrateWorkspace: (ws) => migrateLegacy(ws),
+    submit: async () => ({ sessionId: 'sess-mig' }),
+    ensureSession: async () => ({ sessionId: 'sess-mig', created: false }),
+  })
+  const migServer = createServer((req, res) => migHandler(req, res).catch(() => {
+    res.writeHead(500, { 'content-type': 'application/json' })
+    res.end('{"ok":false}')
+  }))
+  await new Promise((resolve) => migServer.listen(0, '127.0.0.1', resolve))
+  const migBase = `http://127.0.0.1:${migServer.address().port}`
+  try {
+    // 造一个"升级前"的旧目录项目：workflow.json 在 <ws>/flow-projects/ 下。
+    const legacyName = 'e2e-migrated'
+    const legacyDir = path.join(migWorkspace, 'flow-projects', legacyName)
+    await mkdir(legacyDir, { recursive: true })
+    await writeFile(path.join(legacyDir, 'workflow.json'), JSON.stringify(graph(legacyName, 2)), 'utf8')
+    // boot（打开面板的第一帧）就触发迁移：项目出现在新根，旧位置清空。
+    const bootText = await (await fetch(`${migBase}/codeflow/canvas?boot=1`)).text()
+    assert.ok(bootText.includes('CodeFlow 画布'))
+    const newDir = path.join(migWorkspace, 'CodeFlow', 'flow-projects', legacyName)
+    const onDisk = JSON.parse(await readFile(path.join(newDir, 'workflow.json'), 'utf8'))
+    assert.equal(onDisk.project.name, legacyName)
+    assert.ok(!(await readdir(path.join(migWorkspace, 'flow-projects'))).includes(legacyName), 'the legacy directory is emptied')
+    const migration = JSON.parse(await readFile(path.join(migWorkspace, 'CodeFlow', 'migration.json'), 'utf8'))
+    assert.ok(migration.moved.includes(legacyName), `migration.json names the project: ${JSON.stringify(migration)}`)
+    // 重启后（新 store、同工作区）boot 仍能载入迁移过来的最近项目。
+    const text = await (await fetch(`${migBase}/codeflow/canvas?boot=1`)).text()
+    const bootMatch = /window\.__CF_BOOT__=(\{[\s\S]*?});<\/script>/.exec(text)
+    assert.ok(bootMatch, 'boot payload present')
+    const boot = JSON.parse(bootMatch[1])
+    assert.equal(boot.project, legacyName, 'boot opens the migrated project')
+  } finally {
+    await new Promise((resolve) => migServer.close(resolve))
+    await rm(migWorkspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {})
+  }
+  ok('legacy flow-projects/ project migrates on first boot and boot loads it afterwards')
 }
 
 await new Promise((resolve) => server.close(resolve))

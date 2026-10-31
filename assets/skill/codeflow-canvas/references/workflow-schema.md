@@ -5,8 +5,11 @@
 
 | 视图 | `view` | 落盘文件 | 内容 |
 | --- | --- | --- | --- |
-| 任务流水线 | `"tasks"` | `<工作区>/flow-projects/<项目名>/workflow.json` | scan → comments → 任务节点 → 审查 → 交付 |
-| 模块结构图 | `"modules"` | `<工作区>/flow-projects/<项目名>/workflow.modules.json` | 每个代码文件一个 `module` 节点 + 符号子节点 |
+| 任务流水线 | `"tasks"` | `<根>/flow-projects/<项目名>/workflow.json` | scan → comments → 任务节点 → 审查 → 交付 |
+| 模块结构图 | `"modules"` | `<根>/flow-projects/<项目名>/workflow.modules.json` | 每个代码文件一个 `module` 节点 + 符号子节点 |
+
+> v1.0：默认根是 `<工作区>/CodeFlow`，可在画布「设置」里自定义（也支持给单个项目覆盖目录）；
+> 一切以消息里的 `graphPath` 为准。旧 `<工作区>/flow-projects/` 里的项目会在升级后自动迁移一次。
 
 画布面板从宿主 HTTP 接口读取当前激活视图的状态；两张图互不影响（写一边不会动另一边的 `rev`）。
 新建项目只有任务流水线视图；模块结构图只在**导入**时生成。旧项目兼容：只有一份 `workflow.json` 的
@@ -60,7 +63,7 @@
 | --- | --- | --- |
 | `format` | string | 固定 `codeflow/1`，不匹配则拒绝加载 |
 | `rev` | int | 版本号，**由宿主维护、按视图独立计数**：每次回填自增，面板以此判断是否采纳新状态 |
-| `project.name` | string | 项目名，即 `flow-projects/` 下的目录名（安全化：仅中文/字母/数字/`-`/`_`）；两个视图共享同一项目名 |
+| `project.name` | string | 项目名，即项目根下 `flow-projects/` 里的目录名（安全化：仅中文/字母/数字/`-`/`_`）；两个视图共享同一项目名 |
 | `project.language` | string | 项目主语言（新建时用户选；导入时自动检测，如 `python`） |
 | `project.origin` | string | `new` \| `import` |
 | `nodes[].id` | string | 任务流水线 `t1, t2, …`；模块结构图 `m1, m2, …`；旧图遗留的 `n1…` 仍合法。图内唯一，跨视图不会歧义 |

@@ -13,6 +13,8 @@ v0.5.1 修复：整图回填改为**首选"改图文件 + `codeflow_canvas` `mod
 `tool input is invalid JSON` → 整回合 `MALFORMED_RESPONSE`，且该错误不在宿主默认重试码表内）。
 v0.6.0 新增：**双视图（导入一次同时生成任务流水线与模块结构图，工具栏随时切换）、
 agent 修改代码时高亮所属模块（依据真实写文件工具调用）、左侧导航可搜索的二级列表**。
+v1.0.1 修复与升级：**「测试运行」真实执行（自包含运行请求 + 回合结束对账 + 一键重试）、
+画布四边贴满面板、项目迁入 `<工作区>/CodeFlow/`（根目录可自定义，旧数据自动迁移）**。
 
 ## 它长什么样
 
@@ -41,8 +43,10 @@ agent 修改代码时高亮所属模块（依据真实写文件工具调用）�
 - **模块导航**：左侧一排模块选项卡（输入/方案/构建/执行/质检/输出），带实时计数；
   分类下 ≥2 个节点时点击弹出**可搜索的二级浮层**（按模块名/路径过滤、↑/↓/Enter 键盘导航、
   选中后缩放定位并高亮），只有 1 个节点时直接定位
-- **持久化**：画布编辑自动落盘到 `<工作区>/flow-projects/<项目名>/workflow.json`（任务流水线）与
-  `workflow.modules.json`（模块结构图）；激活视图记忆在 `view.json`，重启后回到上次的视图与缩放
+- **持久化**：画布编辑自动落盘到 `<工作区>/CodeFlow/flow-projects/<项目名>/workflow.json`（任务流水线）与
+  `workflow.modules.json`（模块结构图）；激活视图记忆在 `view.json`，重启后回到上次的视图与缩放。
+  项目根目录可在画布工具栏 ⚙ 设置里自定义（全局根 + 单项目覆盖），旧 `flow-projects/` 数据
+  首次启动自动迁移到新根
 - **深/浅色**：跟随 DSH 当前主题（切换时画布即时同步，不重载、不丢视图）
 
 ## 安装
@@ -91,7 +95,7 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
              agent 按技能执行 → 调 codeflow_canvas（render/progress，带 view）
                                         ↓
    store（每个视图独立的 rev 持有者）
-     + flow-projects/*/workflow.json + workflow.modules.json + view.json
+     + CodeFlow/flow-projects/*/workflow.json + workflow.modules.json + view.json
      + sessions.js（专用会话绑定）
    activity.js（内存过程缓冲 + 编辑表）+ undo.js（.undo/ 快照与恢复）
 ```
@@ -118,6 +122,55 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
    会被宿主置 `failed`，画布不会永久转圈。
 8. **撤销以"次"为单位**。`lib/undo.js` 在投递前对项目源码树做快照；恢复时先备份当前状态，
    且只触碰快照候选范围——`node_modules`/`dist`/`.git` 里的改动永远不会被误删。
+
+## v1.0.1 的修复与升级
+
+### A. 「测试运行」空转 → 真实执行、明确失败、一键重试
+
+实测现场：画布点「测试运行」后，专用会话收到 `[CodeFlow:RUN_NODE]`，agent 回复了几句话，
+但没有执行测试、没有调用 `progress`，节点永远停在「待运行」。四层修复：
+
+1. **运行请求自包含**——`RUN_NODE` 直接携带 `node`（`type`/`title`/`params`，`cmd` 必带）、
+   `upstream`（直接上游的 `status` 与 `result` 摘要，≤120 字）、`cwd`（`testrun`/`shell` 必须执行的
+   目录：导入项目 = 源码树，新建项目 = 项目目录）与 `expect`（一句话验收）；`RUN_ALL` 携带
+   `order`（拓扑序、只含 `pending/failed`）。首行仍是单行 JSON，其后宿主附加三行
+   「本次执行要求」：本次必须真实执行（"本会话之前跑过"不算）、结束前必须 `progress` 回填、
+   未执行就结束回合宿主会置 `failed`。解析规则同步更新（`references/protocol.md`）：
+   取首行 `]` 之后到行尾的 JSON，其后正文是附加要求。
+2. **技能语义硬化**——`SKILL.md` 与 `references/node-types.md` 写死 `testrun` 契约：在项目根执行、
+   必须记录真实命令/退出码/输出尾部、`result` 只能来自真实输出、缺运行时 → `failed` + 可行动原因、
+   **禁止未执行置 done**（尤其"之前跑过"）；NEW 阶段的自我测试不算 `testrun` 已执行。
+3. **乐观置 `running`**——prompt 入队成功的一刻，目标节点（RUN_NODE）或清单第一个待运行节点
+   （RUN_ALL）立即 `running`，一个轮询周期内可见；投递失败回滚原状态。
+4. **回合结束对账 + 重试**——运行回合结束但目标节点没有任何 `progress`（正是现场的签名）时，
+   宿主把节点置 `failed`（`result: agent 未执行该节点`）、在活动读模型记一条 `issue`，
+   画布显示横幅 + 一键「重试」（以 `rerun=true` 重发）。新运行开始即清空 issue。
+   "无声的 pending"从此不是可能的结局。
+
+### B. 画布四边贴满面板
+
+生成物 `canvas.html` 开头曾是 `-->-->`（port 脚本的 `replaceRange` 保留结束标记，而 header
+替换的结尾又自带一个 `-->`），浏览器把多余的 `-->` 渲染成一行正文——就是截图顶部 ~22px
+的空隙和那个"箭头"。port 脚本不再重复终止符，且写入前自检（重复即抛错）；嵌入外壳
+（`lib/canvas-page.js`）去掉画布根节点的 1px 边框与 14px 圆角，四边贴满面板（独立预览保留
+卡片外观）；窄宽度下工具栏自动换行。
+
+### C. 项目迁入 `<工作区>/CodeFlow/`，支持自定义
+
+- 新布局：`<根>/flow-projects/<项目名>/`，默认根 `<工作区>/CodeFlow`。`workflow.json`、
+  `workflow.modules.json`、`session.json`、`view.json`、`.undo/` 都在项目目录里，不变。
+- `lib/paths.js` 是唯一的路径拼装点：全局自定义根（任意绝对路径）+ 单项目覆盖
+  （`projects[<key>].dir` 指向项目目录本身）；配置固定在 `<工作区>/CodeFlow/config.json`
+  （根改到别处也放这里）。配置损坏回退默认根 + 一次性 warning，绝不丢项目
+  （`knownRoots` + 旧位置 + 覆盖都参与扫描）。
+- **自动迁移一次**：首次解析到工作区时把 `<工作区>/flow-projects/*` 搬进 `<根>/flow-projects/`
+  （整目录含 `.undo/`；先 `rename`，跨盘/被占用回退为递归复制 + 校验 + 删旧；冲突不覆盖、
+  旧目录保留；失败保留旧目录并记原因；正在运行的项目推迟到下次）。汇总写
+  `<工作区>/CodeFlow/migration.json`，画布 banner 汇报一次。
+- **设置入口**：工具栏 ⚙ 设置（仅宿主模式）——只读的工作区/默认根，可编辑的全局根与
+  当前项目目录（各带「恢复默认」），校验（必须绝对路径、不能是文件、不能在插件包目录内、
+  必须 mkdir + 写探测成功），中文错误原样显示在弹窗里；`GET/POST /codeflow/api/config`
+  与其它路由过同一道 fence。状态栏「已暂存」的 tooltip 显示项目绝对路径。
 
 ## v0.6.0 的三项升级
 
@@ -177,7 +230,7 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
   同项目磁盘写**串行化**（rename 不再可能乱序落地），去掉 `unref()`，插件 dispose 时
   `flushAll()` 兜底——退出前最后一笔不再丢。
 - **B9 两个「未命名」桶**：新增 `projectKeyOf`/`projectDirOf`——空名、纯空白、`..`、字面
-  `untitled` 全部归入唯一的 `__untitled__` 桶（磁盘目录仍是 `flow-projects/untitled/`，兼容旧数据）；
+  `untitled` 全部归入唯一的 `__untitled__` 桶（磁盘目录仍是 `CodeFlow/flow-projects/untitled/`，兼容旧数据）；
   sidecar、undo 根目录、activity 缓冲全部改用同一映射，不再出现两个内存桶共用一个目录互相覆盖。
 - **B10 偶发 fetch failed（观察项）**：客户端全部请求带 15s 超时；轮询连续 3 次失败才显示
   「与宿主连接中断」横幅，避免单次抖动打扰。修复过程中还定位到一个会真实造成该现象的服务端问题：
@@ -207,7 +260,7 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 ### B. 每项目一个专用会话
 
 - 触发创建：首次打开已有项目（boot）、NEW 成功后、IMPORT 成功后、首次运行兜底；in-flight Promise 去重。
-- 持久绑定：`flow-projects/<project>/session.json` sidecar（临时文件 + rename 原子写，
+- 持久绑定：项目目录里的 `session.json` sidecar（临时文件 + rename 原子写，
   损坏/版本不符按未绑定处理）；冷会话直接采用（`sessionController.prompt` 会恢复）。
 - 投递：`sessionController.prompt({requestId, sessionId, mode:'queue', content}, signal)`；
   `session/not-found`/`archived` → 重建一次并重试一次；`session/writer-held` → 不抢，报"会话正被其他写入占用"。
@@ -228,7 +281,7 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 
 ### D. 撤销 agent 的文件修改（按次运行快照）
 
-- 一次 `RUN_NODE`/`RUN_ALL` = 一次运行。投递前快照项目根（新建项目 = `flow-projects/<project>/`，
+- 一次 `RUN_NODE`/`RUN_ALL` = 一次运行。投递前快照项目根（新建项目 = `CodeFlow/flow-projects/<project>/`，默认根可配置，
   导入项目 = `meta.importedFrom`），排除 `.undo`/`.git`/`node_modules`/`venv`/`__pycache__`/`dist`/
   `build`/`target`/`coverage`/`.next`/`.cache` 与 `workflow.json`/`session.json`；符号链接跳过并记录
   （`partial:true`）；上限 5000 文件 / 512 MB，超过则**保留 undoable:false 记录**（阻止跳过它撤销更早的运行）。
@@ -246,7 +299,9 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 ```
 lib/index.js        插件入口：注册技能/命令/工具，串起 HTTP、会话、活动与撤销（按视图）
 lib/client.js       浏览器半侧：侧边栏图标 + main 面板 + "打开会话"导航桥
-lib/routes.js       /codeflow 路由与 JSON API（state/view/save/import/action/session/activity/undo）
+lib/routes.js       /codeflow 路由与 JSON API（state/view/save/import/action/session/activity/undo/config）
+lib/paths.js        v1.0：项目路径的唯一拼装点（默认根 <工作区>/CodeFlow、全局自定义根 +
+                    单项目覆盖、config.json、一次性旧目录迁移）
 lib/duo.js          双导入编排：一次扫描同时生成任务流水线与模块结构图（共用项目名）
 lib/sessions.js     画布专用会话管理器：ensure/rebind/sidecar/错误恢复/投递
 lib/activity.js     Activity Hub：事件订阅、节点映射、环形缓冲、进度、文件编辑表（纯内存）
