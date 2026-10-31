@@ -1,0 +1,122 @@
+/* ============================================================================
+ * CodeFlow 画布的浅色主题
+ * ============================================================================
+ * 由 tools/port-canvas.mjs 追加到样式表末尾，因此这些规则永远排在深色规则
+ * 之后；选择器统一加 html[data-cf-theme="light"] 前缀，特异性高于原规则，不需要
+ * !important，深色外观完全不受影响。
+ *
+ * 分工：
+ *   - 表面 / 边框 / 文字 / 强调色 → 覆盖 #codeflow-canvas 上的 --cf-* 变量，
+ *     凡是用 var() 写的规则自动跟随；
+ *   - 写死深色字面量的规则（节点卡、对话框、菜单、toast…）→ 逐条覆盖；
+ *   - 内联写进 style 的颜色（状态徽章、小地图）由 JS 调色板负责，见 port-canvas.mjs。
+ *
+ * 取色原则：中性偏冷的浅灰做画布底，白卡承载节点，靛蓝（#4f5bd5）替代深色态
+ * 的亮紫强调色，保证白底上的对比度；状态色单独调深以保证文字可读。
+ * ========================================================================= */
+
+/* ---- 变量层：全局表面与文字 ---- */
+html[data-cf-theme="light"] #codeflow-canvas{
+  --cf-bg:#eef1f6; --cf-stage:#f5f7fa; --cf-panel:#ffffff; --cf-panel2:#eef1f6;
+  --cf-border:#dee3ea; --cf-border2:#c6cedb; --cf-text:#1b1f27; --cf-dim:#5d6673;
+  --cf-accent:#4f5bd5; --cf-danger:#d92d20;
+}
+
+/* ---- 节点卡 ---- */
+html[data-cf-theme="light"] .cf-node{background:#ffffff; border-color:#d8dee8; box-shadow:0 1px 3px rgba(16,24,40,.07);}
+html[data-cf-theme="light"] .cf-node.sel{border-color:var(--cf-accent); box-shadow:0 0 0 2px rgba(79,91,213,.22), 0 6px 18px rgba(16,24,40,.14);}
+html[data-cf-theme="light"] .cf-node-head{border-bottom-color:rgba(16,24,40,.10);}
+/* 徽章文字是内联状态色，压在按类型着色的头部上只有 ~3.8:1。给一层不透明白底后，
+   实际背景回到白色，最差也 >=4.6:1，同时看起来是一枚药丸而不是浮字。 */
+html[data-cf-theme="light"] .cf-badge{background:#ffffff;}
+html[data-cf-theme="light"] .cf-in{background:#fbfcfe;}
+html[data-cf-theme="light"] .cf-port .cf-dot{background:#ffffff;}
+html[data-cf-theme="light"] .cf-node-res{background:#f5f7fa;}
+html[data-cf-theme="light"] .cf-grip{color:rgba(16,24,40,.26);}
+
+/* ---- 连线 ---- */
+html[data-cf-theme="light"] .cf-link{stroke:#b7c0cf;}
+html[data-cf-theme="light"] .cf-link.sel{stroke:var(--cf-accent);}
+
+/* ---- 工具栏 / 状态栏 ---- */
+html[data-cf-theme="light"] .cf-tbtn:hover{background:#e9edf4;}
+html[data-cf-theme="light"] .cf-tbtn.cf-accent{background:rgba(79,91,213,.10); border-color:rgba(79,91,213,.38); color:#3b46b8;}
+html[data-cf-theme="light"] .cf-tbtn.cf-accent:hover{background:rgba(79,91,213,.18);}
+
+/* ---- 模块导航 ---- */
+html[data-cf-theme="light"] .cf-nav{background:rgba(255,255,255,.94); box-shadow:0 6px 18px rgba(16,24,40,.10);}
+html[data-cf-theme="light"] .cf-navbtn.active{background:rgba(79,91,213,.12); border-color:rgba(79,91,213,.38); color:#3b46b8;}
+
+/* ---- 缩放器 / 小地图 ---- */
+html[data-cf-theme="light"] .cf-zoomer button{background:rgba(255,255,255,.96);}
+html[data-cf-theme="light"] .cf-mini{background:#ffffff;}
+
+/* ---- 右键菜单 ---- */
+html[data-cf-theme="light"] .cf-menu{background:#ffffff; box-shadow:0 10px 30px rgba(16,24,40,.16);}
+html[data-cf-theme="light"] .cf-mitem:hover{background:rgba(79,91,213,.09);}
+html[data-cf-theme="light"] .cf-mitem svg{color:var(--cf-dim);}
+html[data-cf-theme="light"] .cf-mitem.danger{color:#b42318;}
+html[data-cf-theme="light"] .cf-mitem.danger svg{color:#d92d20;}
+
+/* ---- 弹窗与表单 ---- */
+html[data-cf-theme="light"] .cf-modal{background:rgba(16,24,40,.32);}
+html[data-cf-theme="light"] .cf-dialog{background:#ffffff; box-shadow:0 18px 48px rgba(16,24,40,.18);}
+html[data-cf-theme="light"] .cf-hintbox{background:#f5f7fa;}
+html[data-cf-theme="light"] .cf-btn:hover{background:#e9edf4;}
+html[data-cf-theme="light"] .cf-btn.cf-primary{color:#ffffff;}
+html[data-cf-theme="light"] .cf-btn.cf-primary:hover{background:#5b67dd;}
+html[data-cf-theme="light"] .cf-btn.cf-danger{background:rgba(217,45,32,.08); border-color:rgba(217,45,32,.32); color:#b42318;}
+
+/* ---- 提示条 / toast ---- */
+html[data-cf-theme="light"] .cf-toast{background:#ffffff; box-shadow:0 8px 22px rgba(16,24,40,.14);}
+html[data-cf-theme="light"] .cf-toast.err{border-color:rgba(217,45,32,.45); color:#b42318;}
+html[data-cf-theme="light"] .cf-toast.ok{border-color:rgba(21,128,61,.45); color:#15803d;}
+html[data-cf-theme="light"] .cf-banner{background:rgba(79,91,213,.10); border-color:rgba(79,91,213,.34); color:#3b46b8;}
+html[data-cf-theme="light"] .cf-banner-x{color:#3b46b8;}
+
+/* ---- 空状态 ---- */
+html[data-cf-theme="light"] .cf-empty-card{background:rgba(255,255,255,.72);}
+html[data-cf-theme="light"] .cf-empty-hint{color:#6b7280;}
+
+/* ---- v0.5.0：会话入口 / 节点活动行 / 执行监视器 / 执行过程 / 撤销 ---- */
+html[data-cf-theme="light"] .cf-sbtn{background:#ffffff;}
+html[data-cf-theme="light"] .cf-sbtn:hover{background:#e9edf4;}
+html[data-cf-theme="light"] .cf-sbtn.has{color:#1b1f27; border-color:#c6cedb;}
+html[data-cf-theme="light"] .cf-node-act{background:#f5f7fa;}
+html[data-cf-theme="light"] .cf-act-meta{color:#5d6673;}
+html[data-cf-theme="light"] .cf-node-act.err{color:#b42318;}
+html[data-cf-theme="light"] .cf-monitor{background:rgba(255,255,255,.97); box-shadow:0 6px 18px rgba(16,24,40,.10);}
+html[data-cf-theme="light"] .cf-mrow b{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-mbar{background:#e2e8f0;}
+html[data-cf-theme="light"] .cf-think{background:#f5f7fa; border-color:#dee3ea;}
+html[data-cf-theme="light"] .cf-think.degraded{color:#5d6673;}
+html[data-cf-theme="light"] .cf-step{background:#f5f7fa;}
+html[data-cf-theme="light"] .cf-step .cf-stname{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-step.ok .cf-stst{color:#15803d;}
+html[data-cf-theme="light"] .cf-step.error .cf-stst{color:#b42318;}
+html[data-cf-theme="light"] .cf-step.running .cf-stst{color:#1d4ed8;}
+html[data-cf-theme="light"] .cf-art{background:#f5f7fa;}
+html[data-cf-theme="light"] .cf-art .cf-artpath{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-art .cf-artkind{color:#5d6673;}
+html[data-cf-theme="light"] .cf-undorow{background:#ffffff;}
+html[data-cf-theme="light"] .cf-undorow .cf-uline1{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-ustate.ok{color:#15803d; border-color:rgba(21,128,61,.45);}
+html[data-cf-theme="light"] .cf-ustate.warn{color:#a16207; border-color:rgba(161,98,7,.4);}
+
+/* ---- v0.6.0：视图切换 / 二级导航浮层 / 编辑高亮 ---- */
+html[data-cf-theme="light"] .cf-viewtabs{background:#eef1f6;}
+html[data-cf-theme="light"] .cf-viewtab{color:#5d6673;}
+html[data-cf-theme="light"] .cf-viewtab:hover{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-viewtab.active{background:rgba(79,91,213,.12); border-color:rgba(79,91,213,.38); color:#3b46b8;}
+html[data-cf-theme="light"] .cf-viewtab.active .cf-vtab-count{color:#3b46b8;}
+html[data-cf-theme="light"] .cf-vtab-dot{background:#b45309;}
+html[data-cf-theme="light"] .cf-navpop{background:#ffffff; box-shadow:0 10px 30px rgba(16,24,40,.16);}
+html[data-cf-theme="light"] .cf-navrow:hover,html[data-cf-theme="light"] .cf-navrow.active{background:rgba(79,91,213,.09); border-color:rgba(79,91,213,.30);}
+html[data-cf-theme="light"] .cf-navrow .cf-navrow-sub{color:#5d6673;}
+html[data-cf-theme="light"] .cf-navempty{color:#5d6673;}
+html[data-cf-theme="light"] .cf-edittag{color:#b45309; border-color:rgba(180,83,9,.45);}
+html[data-cf-theme="light"] .cf-edittag.err{color:#b42318; border-color:rgba(217,45,32,.45);}
+html[data-cf-theme="light"] .cf-editbadge{background:#fff7ed; border:1px solid rgba(180,83,9,.45); color:#b45309;}
+html[data-cf-theme="light"] .cf-editbadge.err{background:#fef3f2; border-color:rgba(217,45,32,.45); color:#b42318;}
+html[data-cf-theme="light"] .cf-node.cf-edited .cf-node-head::after{background:#b45309;}
+html[data-cf-theme="light"] .cf-naveditdot{background:#b45309;}

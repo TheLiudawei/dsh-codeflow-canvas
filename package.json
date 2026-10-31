@@ -1,0 +1,43 @@
+{
+  "name": "dsh-codeflow-canvas",
+  "version": "0.6.0",
+  "description": "ComfyUI-style coding workflow canvas for DSH: a native sidebar panel renders a node graph where every node is an agent-executable coding task and every link is a dataflow dependency.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "canvas",
+    "workflow",
+    "comfyui"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "license": "MIT",
+  "author": "TheLiudawei"
+}

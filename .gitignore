@@ -1,0 +1,14 @@
+# Runtime / installed artifacts (DSH writes these next to the plugin source)
+node_modules/
+flow-projects/
+.undo/
+*.log
+
+# Build / archive output (tools/export-archive.*)
+*.zip
+*.tar
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
