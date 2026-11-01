@@ -3,6 +3,9 @@ node_modules/
 flow-projects/
 .undo/
 *.log
+# v1.2.2 文件日志（含轮转产物 codeflow.log.1）与启动探测文件
+codeflow.log*
+.codeflow-log-probe
 
 # Build / archive output (tools/export-archive.*)
 *.zip

@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.2.2-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -33,6 +33,19 @@ It is a DSH (DeepSeek Harness) plugin, ported from the ZCode plugin `codeflow-ca
 - **A graph is reviewable, a transcript is not.** You see the plan, the order, and what is stuck, all at once.
 - **Import costs nothing.** Scans, symbol extraction, coupling scores and feature mapping are all deterministic, local computation — no model call, no network, no npm dependency.
 - **Nothing is faked.** A node only turns green when the agent actually ran something and reported it back; an unexecuted node is reconciled to `failed`, not left spinning.
+
+## What changed in 1.2.2
+
+- **Every canvas control is wired and audited.** A data manifest (`lib/ui/actions.js`, 73 controls) is the single source of truth; `tests/buttons.mjs` statically proves each control is registered and has a binding path, the injected `window.__CF_ACTION_MANIFEST__` powers an in-canvas click self-test (`tests/buttons/canvas-selftest.js`), and `tests/buttons/MANUAL-CHECKLIST.md` covers the rest. Fixed real defects the audit exposed: the **耦合分析** toolbar button never had a click listener (it was `disabled` and reachable only via context menus), the **session chip** was a focusable no-op button (now opens the session dialog), and the ✕ close button of the three drop dialogs (confirm / progress / conflict) was dead — dialog `close`/`cancel` is now handled by one delegated listener on `#cf-dialog`.
+- **Shell-in-shell imports land on the real project root.** All import channels (drop archive, drop folder, path import, dialog import) resolve the root through one conservative detector (`lib/import/root-detect.js`): strip the outer wrapper of an archive, then unwrap further only on unambiguous signals (project marker / shell-name / same-name). `proj/src` stays `proj`; markerless single-chain shells answer `400 SHELL_AMBIGUOUS` instead of inventing a wrong project; empty shells are rejected; multi-project parents keep the parent with a `multiProject` warning. 51 fixture×channel combinations are covered in `tests/import-shells.mjs`.
+- **Work & error logging.** The plugin writes JSONL to `codeflow.log` next to the plugin source (5 MiB rotation, one `.1` backup, serial writes, fail-safe). It records the plugin lifecycle, imports (`import.start/root/done/…`), coupling runs, HTTP errors and canvas UI actions/errors — never prompts, source code, graph JSON or cookies/tokens (key-based redaction + truncation). The canvas batches its own events through `POST /codeflow/api/log` (whitelist `ui.action/ui.error/ui.selftest`, 64 KiB body cap, 50 events/s, 20 per batch). `CODEFLOW_LOG=off` disables it; `CODEFLOW_LOG_FILE` overrides the path. An architecture test (`tests/architecture.mjs`) pins the layering: logging/root-detect stay dependency-free, the import pipeline never touches `req/res`, and the static import graph has no cycles.
+
+## What changed in 1.2.1
+
+- **New projects require a real DSH workspace (Issue #1).** The new-project dialog carries a **workspace dropdown** fed by the read-only `GET /codeflow/api/workspaces` listing, plus a read-only preview of the final absolute path (`将创建到 …`) computed by the host. Requests without a `workspace` — or with one that is not a registered DSH workspace — answer `400` / `409` and create nothing on disk.
+- **Workspace resolution is one explicit chain (Issue #2).** binding (store/sidecar) → project directory → session cwd, each matched against the workspace registry (longest prefix); anything unresolvable is a hard error with the candidate list. The old `registry.list()[0]` fallback — the "workspace wandering" culprit — is gone.
+- **Canvas sessions join the workspace.** When the host exposes workspace entities, the dedicated session is created with `workspaceId` and attached to the workspace group, so it no longer shows up under「未分组」.
+- **Import gained a directory-tree picker.** The import dialog has a **浏览…** button backed by the read-only `GET /codeflow/api/browse` (directories only, no symlink following, 500-entry cap, 5 s timeout). Keyboard-first: ↑/↓ select, Enter enters, Backspace goes up, Esc closes the picker first. The dialog shows both 将扫描 (source dir) and 项目文件保存在 (the workspace the graph lands in).
 
 ## Screenshots
 
@@ -107,6 +120,8 @@ Browser (panel iframe)
   ├── POST /codeflow/api/import      deterministic scan → task pipeline + module graph
   ├── POST /codeflow/api/action      run / create → snapshot, then deliver [CodeFlow:*]
   ├── POST /codeflow/api/session     create or rebind the project's dedicated session
+  ├── GET  /codeflow/api/workspaces  registered workspace list (read-only; feeds the new-project dropdown)
+  ├── GET  /codeflow/api/browse      read-only directory listing for the import picker (dirs only, no links)
   ├── GET  /codeflow/api/activity    reasoning stream, steps, progress, file edits (memory only)
   ├── GET/POST /codeflow/api/undo    run history / restore (LIFO, shared across views)
   └── GET/POST /codeflow/api/config  project root: global root + per-project override
@@ -128,23 +143,25 @@ Design constraints worth knowing:
 
 ## Project layout
 
-Projects live under `<workspace>/CodeFlow/flow-projects/<project>/` (`workflow.json`, `workflow.modules.json`, `view.json`, `features.json`, `session.json`). The root is configurable — toolbar **⚙ Settings** sets a global root and optional per-project overrides, stored in `<workspace>/CodeFlow/config.json` so it stays discoverable per workspace. Legacy `<workspace>/flow-projects/` data migrates on first resolve; conflicts are never overwritten and failures keep the old directory.
+Projects live under `<workspace>/CodeFlow/flow-projects/<project>/` (`workflow.json`, `workflow.modules.json`, `view.json`, `features.json`, `session.json`). The workspace itself is never created by the plugin: **new projects pick one of DSH's registered workspaces** and the canvas session is attached to it (when the host exposes workspace entities). The root is configurable — toolbar **⚙ Settings** sets a global root and optional per-project overrides, stored in `<workspace>/CodeFlow/config.json` so it stays discoverable per workspace. Legacy `<workspace>/flow-projects/` data migrates on first resolve; conflicts are never overwritten and failures keep the old directory. Workspace resolution follows one explicit chain — **binding → project directory → session cwd**, all matched against the registry (longest prefix) — and a project whose workspace cannot be resolved reports an actionable error with the candidate list instead of silently landing somewhere else.
 
 ```
-lib/core/        fsio / path / text primitives (atomic write, tolerant JSON, bounded reads)
-lib/scan/        walk / comments / symbols — the shared scanning layer
-lib/features/    six slices behind features.js (detect, dictionary, index-file, apply, map, ops)
-lib/http/        respond / context / canvas / state / import / features / project routes
-lib/paths.js     the single place that assembles project paths
-lib/store.js     dual-view graph state, per-view rev, sanitizing
-lib/coupling.js  coupling algorithm (constants exported for tests)
-lib/importer.js  deterministic import (task pipeline) + CLI
-lib/analyst.js   structure analysis (module graph)
-lib/routes.js    thin router assembly
-lib/index.js     plugin entry — pure assembly
-assets/canvas/   canvas.html (generated by tools/port-canvas.mjs — do not hand-edit)
-assets/skill/    skill docs + four references
-tests/           validate / regression / e2e / undo / coupling / features / drop-import / contrast
+lib/core/                 fsio / path / text primitives (atomic write, tolerant JSON, bounded reads)
+lib/scan/                 walk / comments / symbols — the shared scanning layer
+lib/features/             six slices behind features.js (detect, dictionary, index-file, apply, map, ops)
+lib/http/                 respond / context / canvas / state / import / features / project / workspace / browse routes
+lib/paths.js              the single place that assembles project paths
+lib/workspace-binding.js  workspace resolution (B1 chain) + registry adapter (the only registry reader)
+lib/browse.js             read-only directory listing (pure functions + fs adapter)
+lib/store.js              dual-view graph state, per-view rev, sanitizing
+lib/coupling.js           coupling algorithm (constants exported for tests)
+lib/importer.js           deterministic import (task pipeline) + CLI
+lib/analyst.js            structure analysis (module graph)
+lib/routes.js             thin router assembly
+lib/index.js              plugin entry — pure assembly
+assets/canvas/            canvas.html (generated by tools/port-canvas.mjs — do not hand-edit)
+assets/skill/             skill docs + four references
+tests/                    validate / regression / e2e / undo / coupling / features / drop-import / workspace / browse / contrast
 ```
 
 ## Development
@@ -158,6 +175,8 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/coupling.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/features.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/drop-import.mjs
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/workspace.mjs
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/browse.mjs
 
 # Regenerate the canvas after editing the port script (never hand-edit the output)
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/port-canvas.mjs
@@ -184,6 +203,9 @@ Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a 
 
 ## Known limitations
 
+- **New projects require a registered workspace.** A directory DSH has not registered cannot host a new project — the plugin refuses with the candidate list (no silent downgrade registration, no writes into DSH's workspace records); add it in DSH's sidebar first.
+- **Import needs a resolvable workspace for the graph files.** The source directory can be anywhere on disk, but the graph lands under the current workspace; with nothing bound yet (fresh install, no project) import reports what to do instead of guessing a location.
+- **The browse picker lists directories only.** No files, no sizes, no contents; symlinks and junctions are never followed or listed; 500 entries per level and a 5 s timeout guard slow or disconnected network shares. Windows reparse tags beyond symlinks/junctions are not enumerable without native code.
 - **Edit highlighting trusts only real write tools.** Writes through `shell` redirection or indirect scripts are out of scope and not guessed at.
 - **Only files in a graph are highlighted.** A file outside the module graph gets a one-time notice instead of a fabricated highlight.
 - **Edit records are memory-only.** Markers disappear on host restart; they never enter `workflow.json` or logs.

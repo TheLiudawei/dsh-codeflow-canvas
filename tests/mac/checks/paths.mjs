@@ -234,27 +234,52 @@ export async function runPathChecks(ctx) {
     return '原样通过'
   })
 
-  await runner.check('PATH-10', 'resolveWorkspaceDirectory：store → 活会话 → 注册表逐级回退', async () => {
-    const bound = path.join(base, '绑定的 工作区')
-    const header = path.join(base, '会话头的 工作区')
-    const registry = path.join(base, '注册表 工作区')
-    for (const dir of [bound, header, registry]) await mkdir(dir, { recursive: true })
-
-    const store = { get: () => ({ cwd: path.join(base, '已失效') }) }
-    const ctx = {
+  await runner.check('PATH-10', 'B1 工作区解析：binding → project-dir → session → 硬失败（v1.2.1）', async () => {
+    const binding = await ctx.load('lib/workspace-binding.js')
+    const registered = path.join(base, '已登记 工作区')
+    const nested = path.join(registered, '嵌套 工作区')
+    const second = path.join(base, '第二个 工作区')
+    const projectDir = path.join(registered, 'CodeFlow', 'flow-projects', 'demo')
+    for (const dir of [registered, nested, second, projectDir]) await mkdir(dir, { recursive: true })
+    const registry = { list: () => [{ path: registered }, { path: nested }, { path: second }] }
+    const mkCtx = (extra = {}) => ({
       get(name) {
-        if (name === 'agents') return { roots: () => [{ session: { header: { cwd: header } } }] }
-        if (name === 'workspaceRegistry') return { list: () => [{ path: registry }] }
+        if (name === 'workspaceRegistry') return registry
+        if (name === 'agents') return extra.agents
         return undefined
       },
-    }
-    const found = await workspace.resolveWorkspaceDirectory(ctx, store)
-    if (path.normalize(found) !== path.normalize(header)) throw new Error(`回退到 ${found}，期望 ${header}`)
+    })
+    const mkStore = (state, anyCwd) => ({
+      get: () => state,
+      anyCwd: () => anyCwd,
+    })
 
-    const boundStore = { get: () => ({ cwd: bound }) }
-    const direct = await workspace.resolveWorkspaceDirectory(ctx, boundStore)
-    if (path.normalize(direct) !== path.normalize(bound)) throw new Error(`store 绑定未优先：${direct}`)
-    return '优先 store 绑定，其次会话头'
+    // 1. binding：store 里的显式绑定仍是已登记工作区 → 直接命中。
+    const bound = await binding.resolveProjectWorkspace(
+      mkCtx(), mkStore({ cwd: registered, dir: undefined, sessionId: undefined }), 'demo',
+    )
+    if (bound.workspace === undefined || bound.source !== 'binding') throw new Error(`binding 未命中：${JSON.stringify(bound)}`)
+
+    // 2. binding 失效（目录被删）：落到 project-dir 的最长前缀。
+    const fallen = await binding.resolveProjectWorkspace(
+      mkCtx(), mkStore({ cwd: path.join(base, '已失效'), dir: projectDir, sessionId: undefined }), 'demo',
+    )
+    if (fallen.source !== 'project-dir' || path.normalize(fallen.workspace) !== path.normalize(registered)) {
+      throw new Error(`失效绑定应落到 project-dir：${JSON.stringify(fallen)}`)
+    }
+
+    // 3. session：绑定与目录都缺席时，活会话 cwd 命中所在工作区。
+    const sessionCtx = mkCtx({ agents: { roots: () => [{ session: { header: { cwd: nested } } }] } })
+    const fromSession = await binding.resolveProjectWorkspace(sessionCtx, mkStore({ cwd: undefined, dir: undefined, sessionId: undefined }), 'demo')
+    if (fromSession.source !== 'session' || path.normalize(fromSession.workspace) !== path.normalize(nested)) {
+      throw new Error(`session 归属应取最长前缀：${JSON.stringify(fromSession)}`)
+    }
+
+    // 4. 回归：没有绑定、没有会话 → 必须硬失败并带候选清单，绝不选第一个。
+    const refused = await binding.resolveProjectWorkspace(mkCtx(), mkStore({ cwd: undefined, dir: undefined, sessionId: undefined }), 'demo')
+    if (refused.workspace !== undefined || refused.code !== 'NO_WORKSPACE') throw new Error(`应硬失败：${JSON.stringify(refused)}`)
+    if (!refused.message.includes(second) || !refused.message.includes(registered)) throw new Error('候选清单不完整')
+    return '优先 binding，失效落 project-dir，session 取最长前缀，无锚点硬失败'
   })
 
   await runner.check('PATH-11', '配置：绝对路径、~ 展开、插件目录拒绝、坏 JSON 回退', async () => {

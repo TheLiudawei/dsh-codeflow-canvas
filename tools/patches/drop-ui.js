@@ -149,7 +149,7 @@ function startDropDirectory(entry,extra){
     if(DROP.cancelled)return;
     if(out.length===0){toast('该文件夹是空的，没有可导入的文件','err');return;}
     if(out.length>1000){toast('文件数超过 1000，已拒绝导入','err');return;}
-    if(state.bytes>500*1024*1024){toast('解压后超过 500 MB，已拒绝导入','err');return;}
+    if(state.bytes>2048*1024*1024){toast('解压后超过 2048 MB，已拒绝导入','err');return;}
     if(extra)toast(extra);
     openDropConfirm({
       kind:'dir',name:entry.name,files:out.length,bytes:state.bytes,
@@ -160,7 +160,7 @@ function startDropDirectory(entry,extra){
 
 /* ---- 压缩包流（单文件）：确认 → 上传本体 → finalize ---- */
 function startDropArchiveFile(file,extra){
-  if(file.size>500*1024*1024){toast('压缩包超过 500 MB，已拒绝导入','err');return;}
+  if(file.size>2048*1024*1024){toast('压缩包超过 2048 MB，已拒绝导入','err');return;}
   if(extra)toast(extra);
   DROP.cancelled=false;
   openDropConfirm({
@@ -294,9 +294,10 @@ function uploadDirectory(out,state,opts){
       });
       return chain.then(function(){
         if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
-        dropStage('正在分析…','正在生成任务流水线与模块结构图（宿主本地执行）');
-        return apiPost('drop/finalize',{token:res.token,kind:'dir',projectName:opts.name,
-          depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
+          dropStage('正在分析…','正在生成任务流水线与模块结构图（宿主本地执行）');
+          return apiPost('drop/finalize',{token:res.token,kind:'dir',projectName:opts.name,
+            project:(G.project&&G.project.name)||undefined,
+            depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
       });
     })
     .then(function(res){finishDropImport(res,opts,'folder');})
@@ -336,6 +337,7 @@ function uploadArchive(file,opts){
           if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
           dropStage('正在解压…','宿主正在解压 '+file.name+'（zip/tar 本地解析；7z/rar 用系统工具）');
           return apiPost('drop/finalize',{token:res.token,kind:'archive',projectName:opts.name,
+            project:(G.project&&G.project.name)||undefined,
             depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
         });
     })
@@ -412,6 +414,7 @@ function finishDropImport(res,opts,kindLabel){
 
 /* ---- 真实路径通道（薄分支）：宿主桥接可用且拿到路径时，就地导入 ---- */
 function dropViaPath(path,kind,opts){
-  return apiPost('drop/path',Object.assign({path:path,kind:kind,depth:opts.depth,
+  return apiPost('drop/path',Object.assign({path:path,kind:kind,project:(G.project&&G.project.name)||undefined,
+    depth:opts.depth,
     fromComments:opts.fromComments,addTests:opts.addTests},opts.rename?{rename:true}:{},opts.overwrite?{overwrite:true}:{},opts.projectName?{projectName:opts.projectName}:{}));
 }

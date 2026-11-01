@@ -98,7 +98,8 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 
 字段：`{name, language, brief, autoRun, rev, graphPath}`。步骤：
 
-1. 项目目录定为 `<工作区>/CodeFlow/flow-projects/<name>/`（v1.0 起项目根可在画布「设置」里自定义，
+1. 项目目录定为 `<工作区>/CodeFlow/flow-projects/<name>/`（v1.2.1 起工作区由**用户在画布对话框里选定**——
+   宿主已校验它是已登记的 DSH 工作区，未选或选错时项目根本不会创建；项目根仍可在画布「设置」里自定义，
    以消息里的 `graphPath` 为准；宿主已做安全化；与现有目录冲突时问用户是覆盖、改名还是取消——
    **不要静默覆盖**）。
    **画布可能已创建骨架**：若 `graphPath` 指向的图带 `meta.starter:true`，说明宿主为了让"新建"在无会话时也能成功，
@@ -133,6 +134,9 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
   生成 `module` 节点依赖图，写入 `workflow.modules.json`（import-analysis.md 第 7 节）。`module` 节点导入时已
   预填推断，用户**运行**某节点时你才介入：读源文件验证并深化职责说明（执行语义见 node-types.md `module`）。
 - 目录里几乎没有源码时模块图不可用（任务流水线照常导入）；不要伪造空模块图。
+- **落点规则（v1.2.1）**：`path` 可以是磁盘上任意已存在目录（不限于工作区）；但图文件始终落在
+  **当前工作区**的 `<工作区>/CodeFlow/flow-projects/<项目名>/` 下——宿主在扫描之前就解析并校验落点，
+  解析不出会直接报错，绝不会把 CodeFlow 文件写进源码目录。
 
 只有两种情况需要你动手：
 

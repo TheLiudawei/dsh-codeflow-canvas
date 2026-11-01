@@ -15,13 +15,14 @@
  * Run: ELECTRON_RUN_AS_NODE=1 <electron> tests/validate.mjs
  */
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { auditLightContrast, summarizeContrast } from './contrast.mjs'
+import './_log-off.mjs'
 
 const ROOT = new URL('..', import.meta.url)
 const read = (rel) => readFile(fileURLToPath(new URL(rel, ROOT)), 'utf8')
@@ -148,7 +149,8 @@ function fakeSessionController() {
     state,
     async create(request) {
       const sessionId = `sess-${state.created.length + 1}`
-      state.created.push({ sessionId, cwd: request.cwd })
+      // v1.2.1：请求可能带 workspaceId（宿主据此把会话 attach 进工作区分组）。
+      state.created.push({ sessionId, cwd: request.cwd, ...(request.workspaceId !== undefined ? { workspaceId: request.workspaceId } : {}) })
       return { sessionId }
     },
     async rename(request) {
@@ -1317,51 +1319,267 @@ await check('the IMPORT gesture is no longer an agent action', async () => {
 })
 await check('NEW creates a durable starter project even with no agent session', async () => {
   recorded.agents.clear()
-  const response = await call('POST', '/codeflow/api/action', {
-    action: 'NEW', name: 'host-new', brief: '做一个命令行工具', language: 'python',
-  })
-  assert.equal(response.status, 200)
-  assert.equal(response.json.ok, true)
-  assert.equal(response.json.delivered, false, 'no session can be reached')
-  assert.equal(response.json.project, 'host-new')
-  assert.equal(response.json.graph.project.name, 'host-new')
-  assert.ok(response.json.graph.nodes.length >= 3, 'a starter skeleton is returned')
-  assert.ok(response.json.warning.includes('agent'), response.json.warning)
+  // v1.2.1：NEW 必须带一个已登记工作区；这里的上下文只提供注册表，没有
+  // sessionController —— 项目照常落盘，agent 接手降级为 warning。
+  const newWs = await mkdtemp(path.join(tmpdir(), 'codeflow-new-ws-'))
+  try {
+    const withRegistry = fakeContext({ workspaceRegistry: { list: () => [{ id: 'ws-1', path: newWs, title: 'NewWs' }] } })
+    apply(withRegistry.ctx)
+    const wsHandler = withRegistry.recorded.routes[0].handler
+    const response = await (async () => {
+      const res = fakeResponse()
+      await wsHandler(fakeRequest('POST', '/codeflow/api/action', {
+        action: 'NEW', name: 'host-new', brief: '做一个命令行工具', language: 'python', workspace: newWs,
+      }), res)
+      return { status: res.statusCode, json: res.body.startsWith('{') ? JSON.parse(res.body) : undefined }
+    })()
+    assert.equal(response.status, 200)
+    assert.equal(response.json.ok, true)
+    assert.equal(response.json.delivered, false, 'no session can be reached')
+    assert.equal(response.json.project, 'host-new')
+    assert.equal(response.json.graph.project.name, 'host-new')
+    assert.ok(response.json.graph.nodes.length >= 3, 'a starter skeleton is returned')
+    assert.ok(response.json.warning.includes('agent'), response.json.warning)
+    assert.equal(normalizePath(response.json.workspace), normalizePath(newWs), 'the response names the chosen workspace')
+    assert.equal(
+      normalizePath(response.json.projectDir),
+      normalizePath(path.join(newWs, 'CodeFlow', 'flow-projects', 'host-new')),
+      'the response names the durable project dir',
+    )
+  } finally {
+    await rm(newWs, { recursive: true, force: true }).catch(() => {})
+  }
 })
 await check('NEW creates the project and queues it in a fresh dedicated session', async () => {
   const sink = []
   const controller = fakeSessionController()
-  const withController = fakeContext({ sessionController: controller })
-  withController.recorded.agents.set('s-new', fakeAgent('s-new', sink, fixtureRoot))
-  apply(withController.ctx)
-  const handler2 = withController.recorded.routes[0].handler
-  const res = fakeResponse()
-  await handler2(fakeRequest('POST', '/codeflow/api/action', {
-    action: 'NEW', name: 'host-agent', brief: 'tiny cli', language: 'javascript',
-  }), res)
-  const body = JSON.parse(res.body)
-  assert.equal(res.statusCode, 200, res.body)
-  assert.equal(body.delivered, true)
-  assert.equal(body.project, 'host-agent')
-  assert.equal(controller.state.created.length, 1, 'a dedicated session is created for the new project')
-  assert.equal(controller.state.prompts.length, 1, 'the NEW turn is queued via the controller')
-  const text = controller.state.prompts[0].content[0].text
-  assert.ok(text.startsWith('[CodeFlow:NEW]'), text)
-  const payload = parsePrompt(text).payload
-  assert.equal(payload.action, 'NEW')
-  assert.equal(payload.project, 'host-agent')
-  assert.ok(normalizePath(payload.graphPath).endsWith('/CodeFlow/flow-projects/host-agent/workflow.json'), payload.graphPath)
-  assert.equal(sink.length, 0, 'agents are woken by the controller, not directly')
+  const newWs = await mkdtemp(path.join(tmpdir(), 'codeflow-new-agent-'))
+  try {
+    const withController = fakeContext({
+      sessionController: controller,
+      workspaceRegistry: { list: () => [{ id: 'ws-1', path: newWs, title: 'NewWs' }] },
+    })
+    withController.recorded.agents.set('s-new', fakeAgent('s-new', sink, newWs))
+    apply(withController.ctx)
+    const handler2 = withController.recorded.routes[0].handler
+    const res = fakeResponse()
+    await handler2(fakeRequest('POST', '/codeflow/api/action', {
+      action: 'NEW', name: 'host-agent', brief: 'tiny cli', language: 'javascript', workspace: newWs,
+    }), res)
+    const body = JSON.parse(res.body)
+    assert.equal(res.statusCode, 200, res.body)
+    assert.equal(body.delivered, true)
+    assert.equal(body.project, 'host-agent')
+    assert.equal(controller.state.created.length, 1, 'a dedicated session is created for the new project')
+    // v1.2.1：宿主有工作区实体时，创建走 workspaceId（会话被 attach 进该工作
+    // 区分组，不再落「未分组」）。
+    assert.equal(controller.state.created[0].workspaceId, 'ws-1', 'the session is created with workspaceId')
+    assert.equal(controller.state.created[0].cwd, undefined, 'workspaceId and cwd are mutually exclusive')
+    assert.equal(controller.state.prompts.length, 1, 'the NEW turn is queued via the controller')
+    const text = controller.state.prompts[0].content[0].text
+    assert.ok(text.startsWith('[CodeFlow:NEW]'), text)
+    const payload = parsePrompt(text).payload
+    assert.equal(payload.action, 'NEW')
+    assert.equal(payload.project, 'host-agent')
+    assert.ok(normalizePath(payload.graphPath).endsWith('/CodeFlow/flow-projects/host-agent/workflow.json'), payload.graphPath)
+    // v1.2.1：侧车记录所选工作区（A2.6 的持久绑定）。
+    const sidecar = JSON.parse(await readFile(path.join(newWs, 'CodeFlow', 'flow-projects', 'host-agent', 'session.json'), 'utf8'))
+    assert.equal(normalizePath(sidecar.workspace), normalizePath(newWs), 'the sidecar records the chosen workspace')
+    assert.equal(sink.length, 0, 'agents are woken by the controller, not directly')
+  } finally {
+    await rm(newWs, { recursive: true, force: true }).catch(() => {})
+  }
 })
 await check('NEW suffixes a project name that is already taken', async () => {
   recorded.agents.clear()
-  const response = await call('POST', '/codeflow/api/action', {
-    action: 'NEW', name: 'host-new', brief: '', language: 'python',
-  })
-  assert.equal(response.status, 200)
-  assert.equal(response.json.project, 'host-new-flow')
-  assert.ok(response.json.warning.includes('占用'), response.json.warning)
+  const dupWs = await mkdtemp(path.join(tmpdir(), 'codeflow-new-dup-'))
+  try {
+    const withRegistry = fakeContext({ workspaceRegistry: { list: () => [{ path: dupWs }] } })
+    apply(withRegistry.ctx)
+    const wsHandler = withRegistry.recorded.routes[0].handler
+    const ask = async (body) => {
+      const res = fakeResponse()
+      await wsHandler(fakeRequest('POST', '/codeflow/api/action', body), res)
+      return { status: res.statusCode, json: res.body.startsWith('{') ? JSON.parse(res.body) : undefined }
+    }
+    const first = await ask({ action: 'NEW', name: 'host-new', brief: '', language: 'python', workspace: dupWs })
+    assert.equal(first.status, 200)
+    const response = await ask({ action: 'NEW', name: 'host-new', brief: '', language: 'python', workspace: dupWs })
+    assert.equal(response.status, 200)
+    assert.equal(response.json.project, 'host-new-flow')
+    assert.ok(response.json.warning.includes('占用'), response.json.warning)
+  } finally {
+    await rm(dupWs, { recursive: true, force: true }).catch(() => {})
+  }
 })
+console.log('\n[v1.2.1 workspace addressing (Issue #1)]')
+{
+  // 专用上下文：registry 提供两个已登记工作区，无 controller（NEW 不需要它）。
+  const wsMain = await mkdtemp(path.join(tmpdir(), 'codeflow-ws-main-'))
+  const wsSecond = await mkdtemp(path.join(tmpdir(), 'codeflow-ws-second-'))
+  const wsRegistry = {
+    list: () => [{ id: 'ws-main', path: wsMain, title: 'Main' }, { id: 'ws-second', path: wsSecond, title: 'Second' }],
+  }
+  const wsCtxPack = fakeContext({ workspaceRegistry: wsRegistry })
+  apply(wsCtxPack.ctx)
+  const wsHandler = wsCtxPack.recorded.routes[0].handler
+  const ask = async (method, url, body) => {
+    const res = fakeResponse()
+    await wsHandler(fakeRequest(method, url, body), res)
+    return { status: res.statusCode, json: res.body.startsWith('{') ? JSON.parse(res.body) : undefined, text: res.body }
+  }
+  const snapshotOf = async (dir) => {
+    try {
+      return (await readdir(dir)).slice().sort()
+    } catch {
+      return []
+    }
+  }
+  try {
+    await check('NEW without a workspace answers 400 WORKSPACE_REQUIRED with zero side effects', async () => {
+      const beforeMain = await snapshotOf(wsMain)
+      const beforeSecond = await snapshotOf(wsSecond)
+      const response = await ask('POST', '/codeflow/api/action', { action: 'NEW', name: 'side-effect', brief: 'x', language: 'python' })
+      assert.equal(response.status, 400, response.text)
+      assert.equal(response.json.ok, false)
+      assert.equal(response.json.code, 'WORKSPACE_REQUIRED')
+      assert.ok(response.json.error.includes('请先选择'), response.json.error)
+      assert.deepEqual(await snapshotOf(wsMain), beforeMain, 'no directory appeared in the registered workspace')
+      assert.deepEqual(await snapshotOf(wsSecond), beforeSecond, 'no directory appeared anywhere else')
+      assert.deepEqual(wsCtxPack.recorded.tools.length, 2, 'no session was created either (nothing to observe)')
+    })
+    await check('NEW with an unregistered directory answers 409 with candidates and zero side effects', async () => {
+      const unregistered = await mkdtemp(path.join(tmpdir(), 'codeflow-ws-free-'))
+      try {
+        const beforeMain = await snapshotOf(wsMain)
+        const beforeFree = await snapshotOf(unregistered)
+        const response = await ask('POST', '/codeflow/api/action', {
+          action: 'NEW', name: 'side-effect', brief: 'x', language: 'python', workspace: unregistered,
+        })
+        assert.equal(response.status, 409, response.text)
+        assert.equal(response.json.code, 'WORKSPACE_NOT_REGISTERED')
+        assert.ok(response.json.error.includes(unregistered), 'names the rejected directory')
+        assert.ok(response.json.error.includes(wsMain) && response.json.error.includes(wsSecond), 'lists the registered candidates')
+        assert.ok(response.json.error.includes('请先在 DSH 左侧栏把它添加为工作区'), 'gives the next step')
+        assert.deepEqual(await snapshotOf(wsMain), beforeMain, 'the registered workspace is untouched')
+        assert.deepEqual(await snapshotOf(unregistered), beforeFree, 'the unregistered directory is untouched')
+      } finally {
+        await rm(unregistered, { recursive: true, force: true })
+      }
+    })
+    await check('GET /api/workspaces is read-only and exposes the listing shape', async () => {
+      const beforeMain = await snapshotOf(wsMain)
+      const beforeSecond = await snapshotOf(wsSecond)
+      const response = await ask('GET', '/codeflow/api/workspaces?project=demo-proj')
+      assert.equal(response.status, 200, response.text)
+      assert.equal(response.json.ok, true)
+      assert.equal(response.json.workspaces.length, 2)
+      const main = response.json.workspaces.find((entry) => entry.path === wsMain)
+      assert.equal(main.exists, true)
+      assert.equal(main.defaultRoot, path.join(wsMain, 'CodeFlow'))
+      assert.equal(main.customRoot, null)
+      assert.equal(main.root, main.defaultRoot)
+      assert.equal(main.name, path.basename(wsMain))
+      assert.equal(
+        normalizePath(main.projectDir),
+        normalizePath(path.join(wsMain, 'CodeFlow', 'flow-projects', 'demo-proj')),
+        'the preview is computed server-side by paths.projectDir',
+      )
+      assert.deepEqual(await snapshotOf(wsMain), beforeMain, 'no CodeFlow/ appeared in the workspace')
+      assert.deepEqual(await snapshotOf(wsSecond), beforeSecond, 'the second workspace is untouched')
+    })
+    await check('GET /api/workspaces without the host service answers 503 NO_WORKSPACE_SERVICE', async () => {
+      const bare = fakeContext()
+      apply(bare.ctx)
+      const res = fakeResponse()
+      await bare.recorded.routes[0].handler(fakeRequest('GET', '/codeflow/api/workspaces'), res)
+      assert.equal(res.statusCode, 503)
+      const body = JSON.parse(res.body)
+      assert.equal(body.code, 'NO_WORKSPACE_SERVICE')
+      assert.ok(body.error.includes('当前 DSH 未提供工作区列表接口'), body.error)
+    })
+    await check('GET /api/config names the workspace and its resolution source', async () => {
+      // 先建一个项目（显式工作区），配置读取应答同一工作区 + source=binding。
+      const created = await ask('POST', '/codeflow/api/action', {
+        action: 'NEW', name: 'cfg-proj', brief: 'x', language: 'python', workspace: wsMain,
+      })
+      assert.equal(created.status, 200, created.text)
+      const response = await ask('GET', '/codeflow/api/config?project=cfg-proj')
+      assert.equal(response.status, 200, response.text)
+      assert.equal(normalizePath(response.json.workspace), normalizePath(wsMain))
+      assert.equal(response.json.workspaceSource, 'binding', 'the explicit NEW binding is the resolution source')
+      assert.equal(
+        normalizePath(response.json.projectDir),
+        normalizePath(path.join(wsMain, 'CodeFlow', 'flow-projects', 'cfg-proj')),
+      )
+    })
+    await check('GET /api/browse lists a fixture directory read-only: dirs only, sorted, no files, no links', async () => {
+      const fixture = await mkdtemp(path.join(tmpdir(), 'codeflow-browse-http-'))
+      try {
+        await mkdir(path.join(fixture, 'beta'), { recursive: true })
+        await mkdir(path.join(fixture, 'Alpha'), { recursive: true })
+        await mkdir(path.join(fixture, '中文目录'), { recursive: true })
+        await mkdir(path.join(fixture, '.hidden'), { recursive: true })
+        await writeFile(path.join(fixture, 'file.txt'), 'x', 'utf8')
+        let linked = false
+        try {
+          await symlink(path.join(fixture, 'beta'), path.join(fixture, 'linked'), 'junction')
+          linked = true
+        } catch {
+          try {
+            await symlink(path.join(fixture, 'beta'), path.join(fixture, 'linked'), 'dir')
+            linked = true
+          } catch {
+            // 无权限创建链接：条件断言。
+          }
+        }
+        const response = await ask('GET', `/codeflow/api/browse?path=${encodeURIComponent(fixture)}`)
+        assert.equal(response.status, 200, response.text)
+        const names = response.json.entries.map((entry) => entry.name)
+        const comparator = (a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'zh-CN') || a.localeCompare(b, 'zh-CN')
+        assert.deepEqual(names, [...names].sort(comparator))
+        for (const expected of ['Alpha', 'beta', '中文目录']) assert.ok(names.includes(expected), `contains ${expected}`)
+        assert.ok(!names.includes('file.txt'), 'files are never listed')
+        assert.ok(!names.includes('.hidden'), 'hidden entries are skipped')
+        if (linked) assert.ok(!names.includes('linked'), 'junctions/symlinks never appear')
+        assert.ok(response.json.entries.every((entry) => entry.path.startsWith(response.json.path)), 'entry paths are absolute')
+        assert.equal(response.json.truncated, false)
+        // 只读断言：文件内容与目录条目不变。
+        const after = await ask('GET', `/codeflow/api/browse?path=${encodeURIComponent(fixture)}`)
+        assert.deepEqual(after.json.entries.map((entry) => entry.name), names)
+        assert.equal(await readFile(path.join(fixture, 'file.txt'), 'utf8'), 'x')
+      } finally {
+        await rm(fixture, { recursive: true, force: true })
+      }
+    })
+    await check('GET /api/browse maps errors: missing 404, file 400, empty 200 roots', async () => {
+      const missing = await ask('GET', `/codeflow/api/browse?path=${encodeURIComponent(path.join(tmpdir(), 'codeflow-browse-nope'))}`)
+      assert.equal(missing.status, 404)
+      assert.equal(missing.json.code, 'BROWSE_NOT_FOUND')
+      const someFile = await mkdtemp(path.join(tmpdir(), 'codeflow-browse-file-'))
+      try {
+        const file = path.join(someFile, 'f.txt')
+        await writeFile(file, 'x', 'utf8')
+        const notDir = await ask('GET', `/codeflow/api/browse?path=${encodeURIComponent(file)}`)
+        assert.equal(notDir.status, 400)
+        assert.equal(notDir.json.code, 'BROWSE_NOT_DIRECTORY')
+        const bad = await ask('GET', '/codeflow/api/browse?path=relative/path')
+        assert.equal(bad.status, 400)
+        assert.equal(bad.json.code, 'BROWSE_BAD_PATH')
+        const roots = await ask('GET', '/codeflow/api/browse')
+        assert.equal(roots.status, 200)
+        assert.equal(roots.json.roots, true)
+        assert.ok(Array.isArray(roots.json.entries))
+      } finally {
+        await rm(someFile, { recursive: true, force: true })
+      }
+    })
+  } finally {
+    await rm(wsMain, { recursive: true, force: true }).catch(() => {})
+    await rm(wsSecond, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 await check('a cross-site request is refused', async () => {
   const res = fakeResponse()
   const req = Object.assign(Readable.from([]), {
@@ -1495,6 +1713,34 @@ await check('undo history tags the run view', () => {
 await check('the canvas carries the module node type', () => {
   assert.ok(canvas.includes("module:{label:'模块说明'"), 'TYPES has module')
   assert.ok(canvas.includes('聚焦符号(可选)'), 'module widgets include the symbol focus')
+})
+
+console.log('\n[v1.2.1 canvas asset: workspace picker + browse tree]')
+await check('the new dialog carries the workspace dropdown and server-side preview', () => {
+  assert.ok(canvas.includes('data-f="workspace"'), 'the workspace select exists')
+  assert.ok(canvas.includes("apiGet('/codeflow/api/workspaces"), 'the dropdown loads from the read-only listing')
+  assert.ok(canvas.includes('id="cf-new-preview"'), 'the read-only destination preview exists')
+  assert.ok(canvas.includes('workspace:ws.path'), 'NEW submits the chosen workspace')
+  assert.ok(canvas.includes('请先选择一个 DSH 工作区再新建项目'), 'the required-workspace copy exists')
+  assert.ok(canvas.includes('errEl.textContent=text'), '400/409 errors render inside the dialog')
+  assert.ok(canvas.includes('以服务端返回为准'), 'the preview defers to the server')
+})
+await check('the import dialog carries the browse entry and both landing hints', () => {
+  assert.ok(canvas.includes('data-act="browse"'), 'the 浏览… button exists')
+  assert.ok(canvas.includes("function openBrowsePicker("), 'the directory-tree picker is injected')
+  assert.ok(canvas.includes('cf-browse-list" role="listbox"'), 'listbox semantics on the tree list')
+  assert.ok(canvas.includes('aria-selected='), 'rows expose selection state')
+  assert.ok(canvas.includes("'/codeflow/api/browse'"), 'the picker reads the read-only browse API')
+  assert.ok(canvas.includes('function closeBrowseOnEscape(') && canvas.includes('if(closeBrowseOnEscape())return;'), 'Esc closes the picker first, the dialog second')
+  assert.ok(canvas.includes('将扫描：'), 'the scan hint names the source directory')
+  assert.ok(canvas.includes('项目文件保存在'), 'the dialog shows where graph files land')
+  assert.ok(/Backspace/.test(canvas), 'Backspace walks up the tree')
+  assert.ok(!canvas.includes("sendMessage('IMPORT'"), 'import never wakes the agent')
+})
+await check('the browse picker ships dark styles and a light override', () => {
+  assert.ok(canvas.includes('.cf-browse{'), 'the overlay style exists')
+  assert.ok(canvas.includes('html[data-cf-theme="light"] .cf-browse-card'), 'light override is attribute-scoped')
+  assert.ok(canvas.includes('.cf-browse-row:focus-visible'), 'keyboard focus is visible')
 })
 
 console.log('\n[v1.0 canvas frame fix (B)]')

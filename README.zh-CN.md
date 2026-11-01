@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.2.2-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -33,6 +33,19 @@
 - **图能审，聊天记录不能。** 计划、顺序、卡在哪一步，一眼看完。
 - **导入不花钱。** 扫描、符号提取、耦合评分、功能归属全是本地确定性计算——不调模型、不联网、不依赖 npm 包。
 - **不伪造。** 只有 agent 真的执行并回报了，节点才会变绿；没执行的节点会被对账为 `failed`，不会永远转圈。
+
+## 1.2.2 变更
+
+- **画布所有可点击控件都有清单、有绑定、有审计。** 数据清单 `lib/ui/actions.js`（73 个控件）是单一事实来源：`tests/buttons.mjs` 静态证明每个控件都登记且至少有一条绑定路径；生成器注入的 `window.__CF_ACTION_MANIFEST__` 供画布内真实点击自检脚本（`tests/buttons/canvas-selftest.js`）使用；其余路径由 `tests/buttons/MANUAL-CHECKLIST.md` 逐项验收。审计揪出并修复了四个真实缺陷：**「耦合分析」工具栏按钮从未绑过 click**（HTML 里 disabled、只能从右键进入，永远点不动）；**会话 chip 是可聚焦但无动作的假按钮**（现在点开「画布专用会话」）；**拖拽确认/进度/冲突三个对话框的 ✕ 是死按钮**——对话框的 close/cancel 现在由 `#cf-dialog` 上的一次事件委托统一兜底。
+- **外壳套外壳的导入找到真实项目根。** 三条导入通道（拖拽压缩包、拖拽文件夹、路径/对话框导入）都走同一个保守根解析器（`lib/import/root-detect.js`）：压缩包先按既有语义剥最外层，之后只有「项目标记 / 明显外壳名 / 与父同名」才继续下钻。`proj/src` 必须保留 `proj`；无标记的单链外壳直接 `400 SHELL_AMBIGUOUS`，绝不生成项目名/根目录错误的项目；空壳 400；多项目父目录保留父目录并记 `multiProject` 警告。`tests/import-shells.mjs` 覆盖 51 个「夹具 × 通道」组合。
+- **工作与报错日志。** 插件在安装目录写 JSONL 文件日志 `codeflow.log`（5 MiB 轮转、保留一个 `.1`、串行写、失败降级不崩）：记录插件生命周期、导入（`import.start/root/done/…`）、耦合分析、HTTP 错误与画布 UI 动作/报错——绝不记录提示词、源码、图 JSON、Cookie/Token（按键名脱敏 + 截断）。画布侧通过 `POST /codeflow/api/log` 批量上报（白名单 `ui.action/ui.error/ui.selftest`、64 KiB 上限、50 条/秒、单批 20 条）。`CODEFLOW_LOG=off` 关闭；`CODEFLOW_LOG_FILE` 覆盖路径。新增架构测试（`tests/architecture.mjs`）钉住分层：logging/root-detect 零领域依赖、导入管道不接触 `req/res`、静态 import 图无环。
+
+## 1.2.1 变更
+
+- **新建项目必须先选真实存在的 DSH 工作区（Issue #1）。** 新建对话框新增**工作区下拉**（数据来自只读的 `GET /codeflow/api/workspaces`），下方只读预览最终绝对路径（`将创建到 …`，由宿主计算）。请求缺 `workspace`、或所选目录不是已登记工作区时，直接 `400` / `409`，磁盘上什么都不多出来。
+- **工作区寻址只剩一条显式链（Issue #2）。** 绑定（store/侧车）→ 项目目录 → 会话 cwd，逐档对工作区注册表做最长前缀匹配；解析不出就硬失败并给出候选清单。旧的「注册表第一个工作区」回退——「乱窜」的根源——已删除。
+- **画布会话真正归属工作区。** 宿主提供工作区实体时，专用会话以 `workspaceId` 创建并被 attach 进该工作区分组，不再落进「未分组」。
+- **导入新增目录树选择器。** 导入对话框路径框右侧新增**浏览…**，底层是只读的 `GET /codeflow/api/browse`（只列目录、不跟符号链接、单层 500 项、5s 超时）。键盘优先：↑/↓ 选择、Enter 进入、Backspace 上一级、Esc 先关选择器。对话框同时显示「将扫描」（源码目录）与「项目文件保存在」（图文件的工作区落点）。
 
 ## 截图
 
@@ -107,6 +120,8 @@ curl -i http://127.0.0.1:<端口>/codeflow/canvas   # 期望 200 + HTML
   ├── POST /codeflow/api/import      确定性扫描 → 任务流水线 + 模块结构图
   ├── POST /codeflow/api/action      运行/新建 → 快照，再投递 [CodeFlow:*]
   ├── POST /codeflow/api/session     新建或重建项目的专用会话
+  ├── GET  /codeflow/api/workspaces  已登记工作区清单（只读；新建下拉的数据源）
+  ├── GET  /codeflow/api/browse      只读目录浏览（导入选择器；只列目录、不跟链接）
   ├── GET  /codeflow/api/activity    思考流、步骤、进度、文件编辑（纯内存）
   ├── GET/POST /codeflow/api/undo    运行历史 / 恢复（LIFO，跨视图共用）
   └── GET/POST /codeflow/api/config  项目根：全局根 + 单项目覆盖
@@ -128,14 +143,16 @@ curl -i http://127.0.0.1:<端口>/codeflow/canvas   # 期望 200 + HTML
 
 ## 项目目录
 
-项目落在 `<工作区>/CodeFlow/flow-projects/<项目名>/`（`workflow.json`、`workflow.modules.json`、`view.json`、`features.json`、`session.json`）。根目录可配置——工具栏 **⚙ 设置**里设全局根，也可以给单个项目覆盖，配置存在 `<工作区>/CodeFlow/config.json`，换根之后仍按工作区可发现。旧版 `<工作区>/flow-projects/` 数据首次解析时自动迁移；冲突不覆盖，失败保留旧目录。
+项目落在 `<工作区>/CodeFlow/flow-projects/<项目名>/`（`workflow.json`、`workflow.modules.json`、`view.json`、`features.json`、`session.json`）。**工作区本身由用户选定**：新建项目必须从 DSH 已登记的工作区里挑一个，插件绝不创建、不登记工作区根目录；宿主提供工作区实体时，画布专用会话一并归属该工作区。根目录可配置——工具栏 **⚙ 设置**里设全局根，也可以给单个项目覆盖，配置存在 `<工作区>/CodeFlow/config.json`，换根之后仍按工作区可发现。旧版 `<工作区>/flow-projects/` 数据首次解析时自动迁移；冲突不覆盖，失败保留旧目录。工作区解析只走一条显式链——**绑定 → 项目目录 → 会话 cwd**，逐档对注册表做最长前缀匹配；解析不出就报错并给候选清单，绝不悄悄落到别处。
 
 ```
 lib/core/        fsio / path / text 基础层（原子写、宽容 JSON、有界读）
 lib/scan/        walk / comments / symbols —— 共享扫描层
 lib/features/    features.js 背后的六片职责子包（detect、dictionary、index-file、apply、map、ops）
-lib/http/        respond / context / canvas / state / import / features / project 路由
+lib/http/        respond / context / canvas / state / import / features / project / workspace / browse 路由
 lib/paths.js     唯一的项目路径拼装点
+lib/workspace-binding.js  工作区解析（B1 链）+ 注册表适配器（全插件唯一读注册表的地方）
+lib/browse.js    只读目录浏览（纯函数 + fs 适配）
 lib/store.js     双视图图状态、按视图的 rev、清洗
 lib/coupling.js  耦合算法（常量导出供测试）
 lib/importer.js  确定性导入（任务流水线）+ CLI
@@ -144,7 +161,7 @@ lib/routes.js    薄路由装配
 lib/index.js     插件入口 —— 纯装配
 assets/canvas/   canvas.html（由 tools/port-canvas.mjs 生成，勿手改）
 assets/skill/    技能文档 + 四份 references
-tests/           validate / regression / e2e / undo / coupling / features / drop-import / contrast
+tests/           validate / regression / e2e / undo / coupling / features / drop-import / workspace / browse / contrast
 ```
 
 ## 开发
@@ -158,6 +175,8 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/coupling.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/features.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/drop-import.mjs
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/workspace.mjs
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/browse.mjs
 
 # 改了迁移脚本后重新生成画布（不要手改生成物）
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/port-canvas.mjs
@@ -184,6 +203,9 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 
 ## 已知限制
 
+- **新建项目要求已登记的工作区。** 未在 DSH 里登记的目录不能作为新建落点——插件直接拒绝并给出可用清单（不静默降级注册、不写 DSH 的工作区数据）；请先在 DSH 左侧栏添加该工作区。
+- **导入需要能解析出图文件的落点工作区。** 源码目录可以是磁盘上任意目录，但图文件落在当前工作区之下；全新安装、还没有任何绑定时，导入会说明该怎么做，而不是猜一个位置。
+- **浏览选择器只列目录。** 不显示文件、大小或内容；符号链接与 junction 一律不进入、不列出；单层最多 500 项、5s 超时保护慢速/掉线的网络位置。Windows 除符号链接/junction 之外的 reparse tag 在不引原生模块的前提下无法枚举。
 - **修改高亮只认真实写文件工具。** 通过 `shell` 重定向或脚本间接写文件不在范围内，也不猜。
 - **未纳入图表的文件不高亮。** 只给一次"修改了未纳入结构图的文件"提示，不伪造高亮。
 - **编辑记录只在内存。** 宿主重启后标记消失；永远不进 `workflow.json`、不进日志。

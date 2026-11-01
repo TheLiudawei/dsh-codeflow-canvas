@@ -345,27 +345,28 @@ const writeFixture = async (name, buffer) => {
   ok('limits: >1000 entries → 413 with the Chinese reason')
 }
 {
-  // 单文件上限：中央目录声明 65 MB（data 本身很小，尺寸检查先于解压）。
+  // 单文件上限：中央目录声明 限额+1 MB（data 本身很小，尺寸检查先于解压）。
+  const declared = ARCHIVE_LIMITS.maxFileBytes + 1024 * 1024
   const entry = { name: 'big.bin', data: Buffer.from('x', 'utf8') }
   const zip = buildZip([entry])
-  // 手工把中央目录与本地头的 uncompressedSize 改成 65 MB。
+  // 手工把中央目录与本地头的 uncompressedSize 改成超额值。
   const patched = Buffer.from(zip)
-  patched.writeUInt32LE(65 * 1024 * 1024, 22) // local header size field
+  patched.writeUInt32LE(declared, 22) // local header size field
   const cdOffset = patched.length - 22
   void cdOffset
   // 找中央目录头再改。
   for (let i = 0; i < patched.length - 4; i += 1) {
     if (patched.readUInt32LE(i) === 0x02014b50) {
-      patched.writeUInt32LE(65 * 1024 * 1024, i + 24)
+      patched.writeUInt32LE(declared, i + 24)
       break
     }
   }
   const dest = path.join(workspace, 'out-big')
   await assert.rejects(
     () => extractZipBuffer(patched, dest),
-    (error) => error.statusCode === 413 && error.message.includes('单文件超过 64 MB'),
+    (error) => error.statusCode === 413 && error.message.includes(`单文件超过 ${Math.round(ARCHIVE_LIMITS.maxFileBytes / (1024 * 1024))} MB`),
   )
-  ok('limits: single entry declaring 65 MB → 413 before any inflation')
+  ok('limits: single entry declaring maxFileBytes+1 MB → 413 before any inflation')
 }
 
 /* ------------------------------------------------------- drop-import 管理 --- */
@@ -391,14 +392,29 @@ const writeFixture = async (name, buffer) => {
   await assert.rejects(() => manager.begin({ kind: 'dir', name: 'x', files: 1001, bytes: 1 }), (e) => e.statusCode === 413)
   await assert.rejects(() => manager.begin({ kind: 'dir', name: 'x', files: 1, bytes: DROP_LIMITS.maxTotalBytes + 1 }), (e) => e.statusCode === 413)
   await assert.rejects(() => manager.begin({ kind: 'virus', name: 'x', files: 1, bytes: 1 }), /类型/)
-  const session = await manager.begin({ kind: 'dir', name: 'x', files: 1, bytes: 1 })
-  await assert.rejects(
-    () => manager.writeFile(session.token, 'big.bin', Buffer.alloc(DROP_LIMITS.maxFileBytes + 1)),
-    (error) => error.statusCode === 413,
-    'the oversized upload is refused',
-  )
-  assert.equal(manager.sessionOf(session.token), undefined, '413 violation tears down the session')
-  await manager.abort(session.token)
+  // 单文件上限已是 2 GB，直接分配超额 Buffer 不可行：加载一份把
+  // maxFileBytes 缩成 8 MB 的模块副本（只替换常量字面量，代码路径一致），
+  // 用 9 MB Buffer 走同一条 413 分支。
+  const src = await readFile(path.join(pluginRoot, 'lib', 'drop-import.js'), 'utf8')
+  const patchedSrc = src.replace(/maxFileBytes:\s*[^,\n]+/, 'maxFileBytes: 8 * 1024 * 1024')
+  if (patchedSrc === src) throw new Error('drop-import.mjs: could not patch the maxFileBytes literal')
+  const tempModule = path.join(pluginRoot, 'lib', 'drop-import.__limits-test__.js')
+  await writeFile(tempModule, patchedSrc, 'utf8')
+  try {
+    const patched = await module('lib/drop-import.__limits-test__.js')
+    if (patched.DROP_LIMITS.maxFileBytes !== 8 * 1024 * 1024) throw new Error('drop-import.mjs: patched limit did not apply')
+    const tinyManager = patched.createDropManager({ importsRoot, logger: console })
+    const session = await tinyManager.begin({ kind: 'dir', name: 'x', files: 1, bytes: 1 })
+    await assert.rejects(
+      () => tinyManager.writeFile(session.token, 'big.bin', Buffer.alloc(patched.DROP_LIMITS.maxFileBytes + 1)),
+      (error) => error.statusCode === 413,
+      'the oversized upload is refused',
+    )
+    assert.equal(tinyManager.sessionOf(session.token), undefined, '413 violation tears down the session')
+    await tinyManager.abort(session.token)
+  } finally {
+    await rm(tempModule, { force: true })
+  }
   ok('drop limits: files/bytes caps at begin, single-file cap kills the session, abort idempotent')
 }
 {

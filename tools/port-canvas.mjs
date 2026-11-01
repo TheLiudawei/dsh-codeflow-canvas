@@ -14,6 +14,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+import { CANVAS_ACTIONS } from '../lib/ui/actions.js'
+
 const SRC = fileURLToPath(new URL('upstream/canvas-template.html', import.meta.url))
 const OUT = fileURLToPath(new URL('../assets/canvas/canvas.html', import.meta.url))
 
@@ -113,6 +115,24 @@ text = replaceOnce(
   + '    <button type="button" class="cf-sbtn" id="cf-session" hidden data-tooltip="画布专用会话：画布里的运行只在该会话执行"></button>\n'
   + '    <span id="cf-mode" class="cf-modetag" hidden>独立模式</span>',
   'status bar session entry',
+)
+
+/* ------------------------------------------------ dialog close delegate --- */
+/* v1.2.2：#cf-dialog 上的一次事件委托统一兜底 close/cancel——dHead 的 ✕ 与
+   各对话框的「取消」不再依赖每个对话框自己记得绑（拖拽确认/进度/冲突三个
+   对话框此前只绑了 cancel，dHead 的 ✕ 是死按钮）。openModal 只替换
+   innerHTML、元素本身常驻，所以这个委托对所有对话框永远生效；各对话框已有
+   的直接绑定保留，二者幂等（closeModal 对关闭态重复调用无副作用）。禁用的
+   按钮不派发 click，所以「正在分析…」时进度框的取消仍不可关。 */
+text = replaceOnce(
+  text,
+  "function closeModal(){$('cf-modal').hidden=true;$('cf-dialog').innerHTML='';}",
+  `function closeModal(){$('cf-modal').hidden=true;$('cf-dialog').innerHTML='';}
+$('cf-dialog').addEventListener('click',function(e){
+  var t=e.target;
+  if(t&&t.closest&&t.closest('[data-act="close"],[data-act="cancel"]'))closeModal();
+});`,
+  'dialog close/cancel delegation',
 )
 
 /* ------------------------------------------------ coupling toolbar btn --- */
@@ -271,6 +291,165 @@ text = replaceOnce(
   'standalone dialog wording',
 )
 
+/* ----------------------------------------------------- new dialog (v1.2.1) --- */
+/* Issue #1：新建项目必须先选定一个已登记的 DSH 工作区。下拉数据来自只读
+   GET /api/workspaces；「将创建到」预览以服务端计算的 projectDir 为准（项目名
+   变化时重新拉取），UI 绝不自己拼最终路径。校验失败（400/409/503）时错误原文
+   显示在对话框内、对话框不关闭；独立模式保留「复制到剪贴板」的旧通道。 */
+const NEW_DIALOG_JS = `
+/* v1.2.1：新建项目（工作区下拉 + 只读路径预览 + 内联错误） */
+var NEWWS={items:[],current:null,previewTimer:null,previewToken:0};
+function newWorkspaceOfSelected(){
+  var sel=$('cf-new-workspace');
+  if(!sel)return null;
+  var value=sel.value;
+  for(var i=0;i<NEWWS.items.length;i++){if(NEWWS.items[i].path===value)return NEWWS.items[i];}
+  return null;
+}
+function renderNewWorkspaceSelect(){
+  var sel=$('cf-new-workspace');
+  var hint=$('cf-new-ws-hint');
+  var submit=$('cf-dialog').querySelector('[data-act="submit"]');
+  if(!sel)return;
+  sel.innerHTML='';
+  if(!NEWWS.items.length){
+    sel.disabled=true;
+    if(hint)hint.textContent=NEWWS.message||'请先在 DSH 左侧栏添加一个工作区，然后重试。';
+    if(submit)submit.disabled=true;
+    updateNewPreview(null);
+    return;
+  }
+  NEWWS.items.forEach(function(ws){
+    var opt=document.createElement('option');
+    opt.value=ws.path;
+    opt.textContent=ws.name+'（'+ws.path+'）';
+    sel.appendChild(opt);
+  });
+  sel.disabled=false;
+  if(NEWWS.current){sel.value=NEWWS.current;}
+  if(hint)hint.textContent='';
+  if(submit)submit.disabled=false;
+  updateNewPreview(newWorkspaceOfSelected());
+}
+function updateNewPreview(ws){
+  var el=$('cf-new-preview');
+  if(!el)return;
+  el.textContent=(ws&&ws.projectDir)?ws.projectDir:((ws&&ws.root)?(ws.root+'/flow-projects/<项目名>（按服务端返回为准）'):'—');
+}
+function refreshNewPreview(){
+  var sel=$('cf-new-workspace');
+  if(!sel||!HOSTED)return;
+  var name=String(($('cf-dialog').querySelector('[data-f="name"]')||{}).value||'').trim();
+  var token=++NEWWS.previewToken;
+  apiGet('/codeflow/api/workspaces'+(name?('?project='+encodeURIComponent(name)):'')).then(function(res){
+    if(token!==NEWWS.previewToken)return;
+    if(res&&res.ok===true){
+      NEWWS.items=res.workspaces||[];
+      NEWWS.current=res.current||null;
+      NEWWS.message=null;
+      renderNewWorkspaceSelect();
+    }
+  }).catch(function(){/* 下拉保持上一次的结果；错误在提交时由服务端给出 */});
+}
+function openNewDialog(){
+  var langs=LANGS.slice();
+  openModal(dHead('file-plus-2','新建项目')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-hintbox">agent 将根据需求在 <b>CodeFlow/flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线；可在「设置」里自定义根目录。</div>'
+    +'<div class="cf-field"><label class="cf-flabel">DSH 工作区</label><select class="cf-in" data-f="workspace" id="cf-new-workspace" aria-label="选择 DSH 工作区"></select>'
+    +'<div class="cf-sechint" id="cf-new-ws-hint" style="min-height:14px">'+(HOSTED?'正在读取工作区…':'独立模式没有宿主工作区')+'</div></div>'
+    +'<div class="cf-row2">'
+    +fld('项目名称','<input class="cf-in" data-f="name" placeholder="如 todo-cli、snake-game">')
+    +fld('语言',selHtml('language',langs,'python'))
+    +'</div>'
+    +fld('需求描述（尽可能具体）','<textarea class="cf-in" rows="5" data-f="brief" placeholder="例：一个命令行待办事项工具，支持添加、完成、列出任务，数据保存为 JSON 文件；提供 --help 说明用法"></textarea>')
+    +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="autoRun" checked> <span>生成后自动执行到初版（需求 → 方案 → 代码生成 → 文件写入 → 测试生成）</span></label></div>'
+    +'<div class="cf-setrow"><label>将创建到（只读预览；根目录可在「设置」里修改）</label><div class="cf-artpath" id="cf-new-preview">—</div></div>'
+    +'<div class="cf-sechint" id="cf-new-err" style="color:#f87171;min-height:14px;white-space:pre-wrap"></div>'
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button><button type="button" class="cf-btn cf-primary" data-act="submit">生成初版</button></div>');
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  var wsSel=d.querySelector('#cf-new-workspace');
+  var nameInput=d.querySelector('[data-f="name"]');
+  var errEl=d.querySelector('#cf-new-err');
+  if(wsSel)wsSel.addEventListener('change',function(){updateNewPreview(newWorkspaceOfSelected());});
+  if(nameInput)nameInput.addEventListener('input',function(){
+    clearTimeout(NEWWS.previewTimer);
+    NEWWS.previewTimer=setTimeout(refreshNewPreview,350);
+  });
+  /* 工作区清单先到，项目名预览随后到（refreshNewPreview 也会再拉一次） */
+  if(HOSTED){
+    apiGet('/codeflow/api/workspaces').then(function(res){
+      if(res&&res.ok===true){NEWWS.items=res.workspaces||[];NEWWS.current=res.current||null;NEWWS.message=null;}
+      else{NEWWS.items=[];NEWWS.message=(res&&res.error)||'当前 DSH 未提供工作区接口。';}
+      renderNewWorkspaceSelect();
+      refreshNewPreview();
+    }).catch(function(){
+      NEWWS.items=[];NEWWS.message='读取工作区失败：宿主不可达。';
+      renderNewWorkspaceSelect();
+    });
+  }else{
+    renderNewWorkspaceSelect();
+  }
+  d.querySelector('[data-act="submit"]').addEventListener('click',function(){
+    var name=(d.querySelector('[data-f="name"]').value||'').trim();
+    var brief=(d.querySelector('[data-f="brief"]').value||'').trim();
+    var lang=d.querySelector('[data-f="language"]').value;
+    var auto=d.querySelector('[data-f="autoRun"]').checked;
+    var ws=newWorkspaceOfSelected();
+    errEl.textContent='';
+    if(!name){toast('请填写项目名称','err');return;}
+    if(!brief){toast('请填写需求描述','err');return;}
+    if(!ws){errEl.textContent='请先选择一个 DSH 工作区再新建项目。';return;}
+    var submitBtn=d.querySelector('[data-act="submit"]');
+    if(!HOSTED){
+      var obj0={action:'NEW',rev:G.rev||0,project:{name:name,language:lang},brief:brief,autoRun:auto,workspace:ws.path};
+      openCopyDialog('[CodeFlow:NEW]'+JSON.stringify(obj0));
+      return;
+    }
+    submitBtn.disabled=true;
+    errEl.textContent='正在创建…';
+    queueWrite('action',function(){
+      return {action:'NEW',title:'CodeFlow · 新建项目',graph:G,view:CURVIEW,viewport:[view.x,view.y,view.k],
+        name:name,language:lang,brief:brief,autoRun:auto,workspace:ws.path,project:name};
+    }).then(function(res){
+      closeModal();
+      if(res&&typeof res.rev==='number')syncRev=res.rev;
+      if(res&&res.graph&&valid(res.graph)){
+        G=clone(res.graph);
+        if(!G.meta)G.meta={};
+        renderAll();
+        applyView();
+        if(G.nodes.length)requestAnimationFrame(function(){fitView();});
+      }
+      if(res&&res.delivered===false){
+        showBanner((res.warning||'项目已创建，但 agent 未能接手')+'。画布仍可编辑、导入和保存。');
+      }else{
+        showBanner('已请求 agent：CodeFlow · 新建项目 — 执行完成后画布会自动回填');
+      }
+      if(res&&res.projectDir){PROJECT_DIR=res.projectDir;updateProjectDirTip();}
+      if(res&&res.warning)toast(res.warning,'err');
+      else if(res&&res.file)toast('已创建 '+res.projectDir,'ok');
+    }).catch(function(err){
+      submitBtn.disabled=false;
+      errEl.textContent='';
+      var text=(err&&err.data&&err.data.error)||(err&&err.message)||String(err);
+      if(err&&(err.status===400||err.status===409||err.status===503)){
+        /* 校验错误显示在对话框内（不要只 toast），并给出下一步 */
+        errEl.textContent=text;
+        if(!NEWWS.items.length)refreshNewPreview();
+        return;
+      }
+      if(err&&err.status===409){syncConflict(err);return;}
+      toast('请求失败：'+text,'err');
+    });
+  });
+}
+`
+
+text = replaceRange(text, 'function openNewDialog(){', 'function openImportDialog(){', NEW_DIALOG_JS, 'new dialog with workspace picker')
+
 /* ----------------------------------------------------------- save project --- */
 text = replaceRange(text, 'function saveProject(){', '\n/* ================= 消息发送 ================= */', `function saveProject(){
   if(!G.project||!G.project.name){
@@ -311,13 +490,8 @@ function persistProject(){
 `, 'saveProject')
 
 /* ------------------------------------------------------------ v1.0 copy --- */
-/* 需求 C：项目目录迁到 CodeFlow/flow-projects/，画布里的说明文案同步 */
-text = replaceOnce(
-  text,
-  `+'<div class="cf-hintbox">agent 将根据需求在 <b>flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线。</div>'`,
-  `+'<div class="cf-hintbox">agent 将根据需求在 <b>CodeFlow/flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线；可在「设置」里自定义根目录。</div>'`,
-  'new-project hint copy',
-)
+/* 需求 C：项目目录迁到 CodeFlow/flow-projects/，画布里的说明文案同步
+   （v1.2.1 起 openNewDialog 已整段接管，只保留帮助弹窗这条文案补丁） */
 text = replaceOnce(
   text,
   '「保存项目」会让 agent 把工作流图写入 <b>flow-projects/&lt;项目&gt;/workflow.json</b>。',
@@ -325,38 +499,89 @@ text = replaceOnce(
   'help dialog copy',
 )
 
-/* ------------------------------------------------------ import dialog --- */
-/* 导入不再唤醒 agent，也不再二选一：目录扫描由宿主 lib/duo.js 确定性完成，
-   一次生成任务流水线与模块结构图两张图，导入后在画布上随时切换 */
-text = replaceOnce(
-  text,
-  "agent 将扫描目录：自动识别主语言、按各语言注释语法提取 TODO/FIXME 等标记，生成「扫描 → 注释解析 → 任务节点 → 审查 → 交付」工作流。最多读取 1000 个文件。",
-  '宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 1000 个文件。',
-  'import dialog hint',
-)
-text = replaceOnce(
-  text,
-  `sendMessage('IMPORT',{
+/* -------------------------------------------------- import dialog (v1.2.1) --- */
+/* 整段接管 openImportDialog：保留手输路径（回填后不自动提交），右侧新增
+   「浏览…」打开目录树弹层（browse-ui.js）；同时显示「将扫描」与「项目文件
+   保存在」（C3：工作区只决定图文件落点，源码目录可以是任意已存在目录）。
+   打开时预检落点工作区（B1 硬失败），解析不出就禁用「开始导入」并内联报错。 */
+const IMPORT_DIALOG_JS = `
+/* v1.2.1：导入项目（浏览选择器 + 落点预检 + 扫描/落点双说明） */
+var IMPORTWS={timer:null,token:0};
+function importDestRefresh(){
+  if(!HOSTED)return;
+  var token=++IMPORTWS.token;
+  var name=(G.project&&G.project.name)||'';
+  apiGet('/codeflow/api/config'+(name?('?project='+encodeURIComponent(name)):'')).then(function(cfg){
+    if(token!==IMPORTWS.token)return;
+    var el=$('cf-import-dest');
+    var errEl=$('cf-import-err');
+    var submit=$('cf-dialog').querySelector('[data-act="submit"]');
+    if(!el)return;
+    if(cfg&&cfg.ok===true){
+      el.textContent=(cfg.root||cfg.defaultRoot||'—')+'/flow-projects/（导入后按项目名落位）';
+      if(errEl)errEl.textContent='';
+      if(submit)submit.disabled=false;
+    }else{
+      el.textContent='—';
+      if(errEl)errEl.textContent=(cfg&&cfg.error)||'未能确定项目文件的落点工作区。';
+      if(submit)submit.disabled=true;
+    }
+  }).catch(function(){
+    var el=$('cf-import-dest');
+    if(el)el.textContent='—';
+  });
+}
+function openImportDialog(){
+  openModal(dHead('folder-open','导入项目')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-hintbox">宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 1000 个文件。</div>'
+    +fld('项目路径','<div class="cf-setline"><input class="cf-in" data-f="path" id="cf-import-path" placeholder="绝对路径（如 /Users/you/project、~/project）或工作区相对路径（./server）；@ 选中的路径也可直接粘贴">'
+    +'<button type="button" class="cf-btn mini" data-act="browse" data-tooltip="浏览磁盘目录（只读）" aria-label="浏览目录">浏览…</button></div>'
+    +'<div class="cf-sechint" id="cf-import-scan" style="min-height:14px">将扫描：（填写路径或点「浏览…」选择目录）</div>')
+    +'<div class="cf-row2">'
+    +fld('递归深度',selHtml('depth',['2','4','6','10'],'4'))
+    +fld('语言','<input class="cf-in" value="自动检测" disabled>')
+    +'</div>'
+    +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="fromComments" checked> <span>从注释标记生成任务节点（TODO / FIXME / HACK…）</span></label></div>'
+    +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="addTests" checked> <span>未发现测试文件时，自动添加「测试生成」节点</span></label></div>'
+    +'<div class="cf-setrow"><label>项目文件保存在（与源码目录无关；宿主按当前工作区落位）</label><div class="cf-artpath" id="cf-import-dest">'+(HOSTED?'读取中…':'独立模式：由粘贴目标宿主决定')+'</div></div>'
+    +'<div class="cf-sechint" id="cf-import-err" style="color:#f87171;min-height:14px;white-space:pre-wrap"></div>'
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button><button type="button" class="cf-btn cf-primary" data-act="submit">开始导入</button></div>');
+  var d=$('cf-dialog');
+  var pathInput=d.querySelector('#cf-import-path');
+  var scanEl=d.querySelector('#cf-import-scan');
+  var errEl=d.querySelector('#cf-import-err');
+  function syncScanHint(){
+    var value=String((pathInput&&pathInput.value)||'').trim();
+    if(scanEl)scanEl.textContent=value?('将扫描：'+value):'将扫描：（填写路径或点「浏览…」选择目录）';
+  }
+  if(pathInput)pathInput.addEventListener('input',syncScanHint);
+  var browseBtn=d.querySelector('[data-act="browse"]');
+  if(browseBtn)browseBtn.addEventListener('click',function(){openBrowsePicker(pathInput);});
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  if(HOSTED)importDestRefresh();
+  d.querySelector('[data-act="submit"]').addEventListener('click',function(){
+    var path=(d.querySelector('[data-f="path"]').value||'').trim();
+    if(!path){toast('请填写项目路径','err');return;}
+    var depth=Number(d.querySelector('[data-f="depth"]').value);
+    var fromComments=d.querySelector('[data-f="fromComments"]').checked;
+    var addTests=d.querySelector('[data-f="addTests"]').checked;
+    closeModal();
+    importProject({
       path:path,
       depth:depth,
       fromComments:fromComments,
-      addTests:addTests
-    },'CodeFlow · 导入项目');`,
-  `importProject({
-      path:path,
-      depth:depth,
-      fromComments:fromComments,
-      addTests:addTests
-    });`,
-  'import dialog submit',
-)
+      addTests:addTests,
+      project:(G.project&&G.project.name)||undefined
+    });
+  });
+  if(pathInput)requestAnimationFrame(function(){try{pathInput.focus();}catch(e){}});
+  syncScanHint();
+}
+`
 
-text = replaceOnce(
-  text,
-  `+fld('项目路径','<input class="cf-in" data-f="path" placeholder="绝对路径或工作区相对路径，如 D:\\\\code\\\\legacy-app 或 ./server">')`,
-  `+fld('项目路径','<input class="cf-in" data-f="path" placeholder="绝对路径（如 /Users/you/project、~/project）或工作区相对路径（./server）；@ 选中的路径也可直接粘贴">')`,
-  'import dialog path placeholder',
-)
+text = replaceRange(text, 'function openImportDialog(){', 'function openAddDialog(worldPos){', IMPORT_DIALOG_JS, 'import dialog with browse picker')
 
 /* ------------------------------------------------ module navigation+pop --- */
 /* v0.6.0：分类点击 → 1 个节点直接定位；≥2 弹出可搜索二级浮层；聚焦单个节点；
@@ -630,11 +855,31 @@ text = replaceOnce(
   "if(e.key==='Escape'){closeNavPop();closeMenus();closeModal();return;}",
   'Escape closes nav pop',
 )
+/* v1.2.1：浏览弹层打开时 Esc 只关弹层、不关导入对话框 */
+text = replaceOnce(
+  text,
+  "if(e.key==='Escape'){closeNavPop();closeMenus();closeModal();return;}",
+  "if(e.key==='Escape'){if(closeBrowseOnEscape())return;closeNavPop();closeMenus();closeModal();return;}",
+  'Escape arms the browse picker',
+)
+/* v1.2.1：浏览弹层打开时 Esc 只关弹层、不关导入对话框；画布手势不进入弹层 */
+text = replaceOnce(
+  text,
+  "  closeNavPopOnCanvas(e);\n  var tgt=e.target;\n  if(tgt.closest('.cf-nav')||tgt.closest('.cf-navpop'))return;",
+  "  closeNavPopOnCanvas(e);\n  var tgt=e.target;\n  if(tgt.closest('.cf-nav')||tgt.closest('.cf-navpop')||tgt.closest('.cf-browse'))return;",
+  'onDown ignores the browse picker',
+)
+text = replaceOnce(
+  text,
+  "  if(e.target.closest('.cf-modal')||e.target.closest('.cf-navpop'))return;",
+  "  if(e.target.closest('.cf-modal')||e.target.closest('.cf-navpop')||e.target.closest('.cf-browse'))return;",
+  'onWheel ignores the browse picker',
+)
 text = replaceOnce(
   text,
   "function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner');}",
-  "function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner')&&!t.closest('.cf-navpop');}",
-  'isBg excludes nav pop',
+  "function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner')&&!t.closest('.cf-navpop')&&!t.closest('.cf-browse');}",
+  'isBg excludes nav pop + browse picker',
 )
 
 /* ------------------------------------------------- link svg dataset hooks --- */
@@ -1588,6 +1833,11 @@ function initCanvasExtras(){
   /* 撤销按钮的 click 绑定（v0.5.2 起只有 Ctrl+Alt+Z 生效，按钮本身漏绑了） */
   var undoBtn=$('cf-tb-undo');
   if(undoBtn)undoBtn.addEventListener('click',openUndoDialog);
+  /* v1.2.2：会话 chip 的 click 绑定。此前 #cf-session 只被 renderSessionChip()
+     改文本、从未绑过 click——一个可聚焦但无动作的假按钮；点开与会话详情
+     「在会话中查看完整过程」走同一个 openSessionDialog 入口。 */
+  var sessionBtn=$('cf-session');
+  if(sessionBtn)sessionBtn.addEventListener('click',openSessionDialog);
   /* v1.0：设置入口只在宿主模式显示（独立预览隐藏） */
   var settingsBtn=$('cf-tb-settings');
   if(settingsBtn){
@@ -1921,6 +2171,36 @@ if (!DROP_JS.includes('drop/begin') || !DROP_JS.includes('drop/finalize') || !DR
   throw new Error('drop-ui.js: expected the begin/finalize/abort upload protocol')
 }
 
+/* ------------------------------------------------------ browse (v1.2.1) --- */
+/* 需求 C：导入目录树选择器（逐级浏览、键盘全程可操作、Esc 只关自己）。
+   与 features/coupling 同一机制：patch 文件由本脚本注入，浅色覆盖带属性前缀。 */
+const BROWSE_CSS = readFileSync(new URL('patches/browse-ui.css', import.meta.url), 'utf8').trim()
+const BROWSE_JS = readFileSync(new URL('patches/browse-ui.js', import.meta.url), 'utf8').trim()
+if (!BROWSE_CSS.includes('.cf-browse{') || !BROWSE_CSS.includes('html[data-cf-theme="light"] .cf-browse-card')) {
+  throw new Error('browse-ui.css: expected the browse card with a light override')
+}
+if (!BROWSE_JS.includes('function openBrowsePicker(') || !BROWSE_JS.includes('function closeBrowseOnEscape(') || !BROWSE_JS.includes('role="listbox"')) {
+  throw new Error('browse-ui.js: expected openBrowsePicker / closeBrowseOnEscape / listbox semantics')
+}
+if (!BROWSE_JS.includes('/codeflow/api/browse')) {
+  throw new Error('browse-ui.js: expected the read-only browse API as the only data source')
+}
+
+/* ------------------------------------------------------- log (v1.2.2) --- */
+/* 工作与报错日志的浏览器半边：捕获阶段 click 委托 + error/rejection 钩子 +
+   批量上报器（POST /codeflow/api/log）。红线：不记录表单值/路径/提示词/图
+   JSON；失败静默丢弃；不重试风暴。与 features/coupling 同一注入机制。 */
+const LOG_JS = readFileSync(new URL('patches/log-ui.js', import.meta.url), 'utf8').trim()
+if (!LOG_JS.includes('function cflogClick(') || !LOG_JS.includes('function cflogFlush(')) {
+  throw new Error('log-ui.js: expected cflogClick and cflogFlush')
+}
+if (!LOG_JS.includes('/codeflow/api/log')) {
+  throw new Error('log-ui.js: expected the log upload endpoint')
+}
+if (LOG_JS.includes('prompt(') || LOG_JS.includes('localStorage.setItem')) {
+  throw new Error('log-ui.js: must not render UI or persist locally')
+}
+
 /* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动。
    FEATURES_CSS 排在它之前：浅色作用域审计从浅色主题注释开始切片，功能样式的
    深色基线不会被误判为「未加前缀的浅色规则」。 */
@@ -1928,7 +2208,16 @@ const LIGHT_CSS = readFileSync(new URL('theme-light.css', import.meta.url), 'utf
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
   throw new Error('theme-light.css: expected the light variable block')
 }
-text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + light theme stylesheet')
+text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${BROWSE_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + browse + light theme stylesheet')
+
+/* ------------------------------------------------ action manifest (v1.2.2) --- */
+/* 控件清单注入：与 tests/buttons.mjs 同源（都 import lib/ui/actions.js），
+   避免清单漂移。暴露只读的 window.__CF_ACTION_MANIFEST__ 供
+   tests/buttons/canvas-selftest.js（粘贴在 iframe 控制台）读取——IIFE 内的
+   var 外部拿不到，必须挂到 window 上。它只是调试信息，不参与行为。 */
+const ACTION_MANIFEST_JS = `/* ==== v1.2.2：画布控件清单（由 tools/port-canvas.mjs 从 lib/ui/actions.js 注入；只读调试信息，不参与行为） ==== */
+var CF_ACTION_MANIFEST=${JSON.stringify(CANVAS_ACTIONS).replace(/</g, '\\u003c')};
+try{window.__CF_ACTION_MANIFEST__=CF_ACTION_MANIFEST;}catch(e){}`
 
 /* ---------------------------------------------------- inject extras tail --- */
 /* 行为层注入点：boot() 之前定义（可包装已提升的函数声明），boot() 之后初始化挂钩。
@@ -1940,11 +2229,28 @@ text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${
 text = replaceOnce(
   text,
   '\nboot();\n})();',
-  '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\n})();',
+  '\n' + ACTION_MANIFEST_JS + '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\n' + BROWSE_JS + '\n' + LOG_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\ninitLogExtras();\n})();',
   'canvas extras script',
 )
 
 /* ------------------------------------------------------------------ write --- */
+/* 生成器侧的第一道清单自检（在 extras 全部注入之后、落盘之前）：
+   key 唯一、静态 id / 全局 handler 必须真的出现在最终文本里。
+   清单与画布漂移在生成时就大声失败，而不是等 tests/buttons.mjs。 */
+{
+  const seenKeys = new Set()
+  for (const action of CANVAS_ACTIONS) {
+    if (seenKeys.has(action.key)) throw new Error(`action manifest: duplicate key ${action.key}`)
+    seenKeys.add(action.key)
+    if (action.id && !text.includes(`id="${action.id}"`)) {
+      throw new Error(`action manifest: static id ${action.id} is not in the generated canvas`)
+    }
+    const handler = action.handler
+    if (typeof handler === 'string' && !handler.startsWith('local:') && !text.includes(`function ${handler}(`)) {
+      throw new Error(`action manifest: handler ${handler} does not exist in the generated canvas`)
+    }
+  }
+}
 if (text.includes('__CF_GRAPH_JSON__')) throw new Error('placeholder survived the port')
 if (/window\.zcode/.test(text)) throw new Error('legacy zcode bridge survived the port')
 /* v1.0（缺陷 B）生成自检：头部注释只允许一个终止符，且注释结束后第一个元素必须是

@@ -8,6 +8,7 @@
  *
  * Run: node tests/features.mjs
  */
+import './_log-off.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'

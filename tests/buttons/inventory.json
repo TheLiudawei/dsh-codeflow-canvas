@@ -1,0 +1,144 @@
+{
+  "note": "surface -> key[] 稳定快照；清单增删必须同步本文件（tests/buttons.mjs §6）",
+  "surfaces": {
+    "toolbar": [
+      "toolbar:cf-tb-add",
+      "toolbar:cf-tb-coupling",
+      "toolbar:cf-tb-fit",
+      "toolbar:cf-tb-help",
+      "toolbar:cf-tb-import",
+      "toolbar:cf-tb-layout",
+      "toolbar:cf-tb-new",
+      "toolbar:cf-tb-runall",
+      "toolbar:cf-tb-save",
+      "toolbar:cf-tb-settings",
+      "toolbar:cf-tb-undo",
+      "toolbar:cf-vtab-modules",
+      "toolbar:cf-vtab-tasks"
+    ],
+    "status": [
+      "status:cf-projname",
+      "status:cf-session"
+    ],
+    "banner": [
+      "banner:cf-banner-retry",
+      "banner:cf-banner-x"
+    ],
+    "empty": [
+      "empty:cf-empty-import",
+      "empty:cf-empty-new"
+    ],
+    "zoom": [
+      "zoom:cf-z-fit",
+      "zoom:cf-z-in",
+      "zoom:cf-z-out"
+    ],
+    "nav": [
+      "nav:cf-navbtn"
+    ],
+    "navpop": [
+      "navpop:cf-navrow"
+    ],
+    "node": [
+      "node:contextmenu",
+      "node:dblclick-details"
+    ],
+    "link": [
+      "link:contextmenu"
+    ],
+    "canvas": [
+      "canvas:contextmenu"
+    ],
+    "monitor": [
+      "monitor:cf-monitor-head"
+    ],
+    "card": [
+      "card:cf-coupling-card"
+    ],
+    "detail": [
+      "detail:cf-think-bottom"
+    ],
+    "dialog": [
+      "dialog:common:cancel",
+      "dialog:common:close"
+    ],
+    "dialog:new": [
+      "dialog:new:submit"
+    ],
+    "dialog:import": [
+      "dialog:import:browse",
+      "dialog:import:submit"
+    ],
+    "dialog:confirm": [
+      "dialog:confirm:submit"
+    ],
+    "dialog:prompt": [
+      "dialog:prompt:submit"
+    ],
+    "dialog:add": [
+      "dialog:add:row"
+    ],
+    "dialog:details": [
+      "dialog:details:session"
+    ],
+    "dialog:coupling": [
+      "dialog:coupling:rerun"
+    ],
+    "dialog:session": [
+      "dialog:session:copy",
+      "dialog:session:new",
+      "dialog:session:open"
+    ],
+    "dialog:undo": [
+      "dialog:undo:restore"
+    ],
+    "dialog:undoconfirm": [
+      "dialog:undoconfirm:confirm"
+    ],
+    "dialog:settings": [
+      "dialog:settings:reset-dir",
+      "dialog:settings:reset-root",
+      "dialog:settings:save"
+    ],
+    "dialog:drop": [
+      "dialog:drop:import"
+    ],
+    "dialog:dropconflict": [
+      "dialog:dropconflict:overwrite",
+      "dialog:dropconflict:rename"
+    ],
+    "browse": [
+      "browse:cancel",
+      "browse:crumb",
+      "browse:pick",
+      "browse:retry",
+      "browse:roots",
+      "browse:row",
+      "browse:up"
+    ],
+    "features": [
+      "features:chip-add",
+      "features:chip-x",
+      "features:empty-btn",
+      "features:farrow",
+      "features:group-row"
+    ],
+    "menu:canvas": [
+      "menu:canvas:analyze-all-coupling",
+      "menu:canvas:import",
+      "menu:canvas:new-project"
+    ],
+    "menu:node": [
+      "menu:node:analyze-coupling",
+      "menu:node:delete",
+      "menu:node:rerun",
+      "menu:node:run"
+    ],
+    "menu:link": [
+      "menu:link:delete"
+    ],
+    "menu:features": [
+      "menu:features:refresh"
+    ]
+  }
+}

@@ -473,6 +473,49 @@ html[data-cf-theme="light"] .cf-drop-progress{background:#e2e8f0;}
 .cf-banner-retry{background:none;border:1px solid #c3cbff;color:#c3cbff;border-radius:10px;font-size:11px;padding:1px 10px;cursor:pointer;flex:0 0 auto;white-space:nowrap;}
 .cf-banner-retry:hover{background:rgba(124,140,255,.18);}
 
+/* ---- v1.2.1：导入目录树选择器（browse-ui.js 的样式） ----
+ * 深色基线；浅色覆盖在文件尾部，带 html[data-cf-theme="light"] 前缀。 */
+.cf-browse{position:absolute;inset:0;z-index:90;background:rgba(8,8,12,.6);display:flex;align-items:center;justify-content:center;padding:16px;}
+.cf-browse[hidden]{display:none;}
+.cf-browse-card{display:flex;flex-direction:column;gap:8px;width:520px;max-width:100%;max-height:100%;background:#20202a;border:1px solid var(--cf-border2);border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.55);padding:14px;}
+.cf-browse-head{display:flex;align-items:center;gap:6px;}
+.cf-browse-title{display:inline-flex;align-items:center;gap:6px;flex:1;font-weight:600;font-size:13px;color:var(--cf-text);}
+.cf-browse-crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:2px;min-height:22px;font-size:11.5px;overflow:hidden;}
+.cf-browse-crumb{background:none;border:1px solid transparent;border-radius:6px;color:var(--cf-dim);font-size:11.5px;padding:2px 6px;cursor:pointer;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf-browse-crumb:hover{border-color:var(--cf-border2);color:var(--cf-text);}
+.cf-browse-crumb.current{color:var(--cf-text);cursor:default;}
+.cf-browse-crumb:disabled{cursor:default;}
+.cf-browse-sep{color:#6d6d7c;flex:0 0 auto;}
+.cf-browse-crumb-dim{color:#6d6d7c;font-size:11.5px;}
+.cf-browse-filter{flex:0 0 auto;}
+.cf-browse-list{display:flex;flex-direction:column;gap:2px;min-height:180px;max-height:46vh;overflow:auto;border:1px solid var(--cf-border);border-radius:8px;padding:4px;background:rgba(0,0,0,.16);}
+.cf-browse-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;border:1px solid transparent;cursor:pointer;color:var(--cf-text);}
+.cf-browse-row:hover,.cf-browse-row.active{background:rgba(124,140,255,.14);border-color:rgba(124,140,255,.35);}
+.cf-browse-row:focus-visible{outline:2px solid rgba(124,140,255,.7);outline-offset:-1px;}
+.cf-browse-glyph{flex:0 0 auto;color:var(--cf-dim);display:inline-flex;}
+.cf-browse-row.active .cf-browse-glyph{color:#b9c2ff;}
+.cf-browse-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;}
+.cf-browse-kind{flex:0 0 auto;font-size:10px;color:var(--cf-dim);border:1px solid var(--cf-border2);border-radius:10px;padding:0 6px;}
+.cf-browse-empty{padding:22px 8px;text-align:center;color:var(--cf-dim);font-size:11.5px;}
+.cf-browse-truncated{padding:6px 8px;font-size:10.5px;color:#fbbf24;text-align:center;}
+.cf-browse-status{display:flex;align-items:center;gap:8px;min-height:16px;font-size:11px;color:var(--cf-dim);flex-wrap:wrap;}
+.cf-browse-hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.cf-browse-note{color:#d29922;}
+.cf-browse-error{color:#f87171;}
+.cf-browse .cf-btn.mini{flex:0 0 auto;}
+html[data-cf-theme="light"] .cf-browse{background:rgba(15,23,42,.45);}
+html[data-cf-theme="light"] .cf-browse-card{background:#ffffff;border-color:#d5dbe6;box-shadow:0 12px 36px rgba(15,23,42,.25);}
+html[data-cf-theme="light"] .cf-browse-list{background:#f5f7fa;border-color:#d5dbe6;}
+html[data-cf-theme="light"] .cf-browse-row:hover,html[data-cf-theme="light"] .cf-browse-row.active{background:rgba(79,91,213,.10);border-color:rgba(79,91,213,.35);}
+html[data-cf-theme="light"] .cf-browse-row.active .cf-browse-glyph{color:#3b46b8;}
+html[data-cf-theme="light"] .cf-browse-row{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-browse-crumb.current{color:#1b1f27;}
+html[data-cf-theme="light"] .cf-browse-sep{color:#5d6673;}
+html[data-cf-theme="light"] .cf-browse-crumb-dim{color:#5d6673;}
+html[data-cf-theme="light"] .cf-browse-kind{color:#5d6673;border-color:#c3cbda;}
+html[data-cf-theme="light"] .cf-browse-truncated{color:#925206;}
+html[data-cf-theme="light"] .cf-browse-note{color:#925206;}
+html[data-cf-theme="light"] .cf-browse-error{color:#b42318;}
 /* ============================================================================
  * CodeFlow 画布的浅色主题
  * ============================================================================
@@ -1286,7 +1329,7 @@ window.addEventListener('keydown',onKey);
 window.addEventListener('keyup',function(e){if(e.key===' '){spaceDown=false;ROOT.classList.remove('dragging');}});
 window.addEventListener('resize',drawMini);
 
-function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner')&&!t.closest('.cf-navpop');}
+function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner')&&!t.closest('.cf-navpop')&&!t.closest('.cf-browse');}
 
 function onDown(e){
   if(e.button===2)return;
@@ -1294,7 +1337,7 @@ function onDown(e){
   closeMenus();
   closeNavPopOnCanvas(e);
   var tgt=e.target;
-  if(tgt.closest('.cf-nav')||tgt.closest('.cf-navpop'))return;
+  if(tgt.closest('.cf-nav')||tgt.closest('.cf-navpop')||tgt.closest('.cf-browse'))return;
   if(tgt.closest('.cf-mini')||tgt.closest('.cf-zoomer')||tgt.closest('.cf-banner'))return;
   var port=tgt.closest('.cf-port');
   if(e.button===0&&port){startPortDrag(e,port);return;}
@@ -1391,7 +1434,7 @@ function onUp(e){
   }
 }
 function onWheel(e){
-  if(e.target.closest('.cf-modal')||e.target.closest('.cf-navpop'))return;
+  if(e.target.closest('.cf-modal')||e.target.closest('.cf-navpop')||e.target.closest('.cf-browse'))return;
   if(mode!=='idle')return;
   e.preventDefault();
   cancelAnim();clearNavActive();
@@ -1421,7 +1464,7 @@ function onCtx(e){
   openCanvasMenu(x,y);
 }
 function onKey(e){
-  if(e.key==='Escape'){closeNavPop();closeMenus();closeModal();return;}
+  if(e.key==='Escape'){if(closeBrowseOnEscape())return;closeNavPop();closeMenus();closeModal();return;}
   var tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='textarea'||tag==='select')return;
   if(e.key===' '&&!spaceDown){spaceDown=true;ROOT.classList.add('dragging');e.preventDefault();return;}
@@ -1654,6 +1697,10 @@ function openModal(html){
   if(first)requestAnimationFrame(function(){try{first.focus();}catch(e){}});
 }
 function closeModal(){$('cf-modal').hidden=true;$('cf-dialog').innerHTML='';}
+$('cf-dialog').addEventListener('click',function(e){
+  var t=e.target;
+  if(t&&t.closest&&t.closest('[data-act="close"],[data-act="cancel"]'))closeModal();
+});
 $('cf-modal').addEventListener('pointerdown',function(e){if(e.target===$('cf-modal'))closeModal();});
 $('cf-modal').addEventListener('keydown',function(e){
   if($('cf-modal').hidden)return;
@@ -1677,47 +1724,215 @@ function selHtml(key,opts,val){
   return '<select class="cf-in" data-f="'+key+'">'+opts.map(function(o){return '<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
 }
 
+
+/* v1.2.1：新建项目（工作区下拉 + 只读路径预览 + 内联错误） */
+var NEWWS={items:[],current:null,previewTimer:null,previewToken:0};
+function newWorkspaceOfSelected(){
+  var sel=$('cf-new-workspace');
+  if(!sel)return null;
+  var value=sel.value;
+  for(var i=0;i<NEWWS.items.length;i++){if(NEWWS.items[i].path===value)return NEWWS.items[i];}
+  return null;
+}
+function renderNewWorkspaceSelect(){
+  var sel=$('cf-new-workspace');
+  var hint=$('cf-new-ws-hint');
+  var submit=$('cf-dialog').querySelector('[data-act="submit"]');
+  if(!sel)return;
+  sel.innerHTML='';
+  if(!NEWWS.items.length){
+    sel.disabled=true;
+    if(hint)hint.textContent=NEWWS.message||'请先在 DSH 左侧栏添加一个工作区，然后重试。';
+    if(submit)submit.disabled=true;
+    updateNewPreview(null);
+    return;
+  }
+  NEWWS.items.forEach(function(ws){
+    var opt=document.createElement('option');
+    opt.value=ws.path;
+    opt.textContent=ws.name+'（'+ws.path+'）';
+    sel.appendChild(opt);
+  });
+  sel.disabled=false;
+  if(NEWWS.current){sel.value=NEWWS.current;}
+  if(hint)hint.textContent='';
+  if(submit)submit.disabled=false;
+  updateNewPreview(newWorkspaceOfSelected());
+}
+function updateNewPreview(ws){
+  var el=$('cf-new-preview');
+  if(!el)return;
+  el.textContent=(ws&&ws.projectDir)?ws.projectDir:((ws&&ws.root)?(ws.root+'/flow-projects/<项目名>（按服务端返回为准）'):'—');
+}
+function refreshNewPreview(){
+  var sel=$('cf-new-workspace');
+  if(!sel||!HOSTED)return;
+  var name=String(($('cf-dialog').querySelector('[data-f="name"]')||{}).value||'').trim();
+  var token=++NEWWS.previewToken;
+  apiGet('/codeflow/api/workspaces'+(name?('?project='+encodeURIComponent(name)):'')).then(function(res){
+    if(token!==NEWWS.previewToken)return;
+    if(res&&res.ok===true){
+      NEWWS.items=res.workspaces||[];
+      NEWWS.current=res.current||null;
+      NEWWS.message=null;
+      renderNewWorkspaceSelect();
+    }
+  }).catch(function(){/* 下拉保持上一次的结果；错误在提交时由服务端给出 */});
+}
 function openNewDialog(){
   var langs=LANGS.slice();
   openModal(dHead('file-plus-2','新建项目')
     +'<div class="cf-dbody">'
     +'<div class="cf-hintbox">agent 将根据需求在 <b>CodeFlow/flow-projects/&lt;项目名&gt;/</b> 下生成项目初版，并在画布上生成任务流水线；可在「设置」里自定义根目录。</div>'
+    +'<div class="cf-field"><label class="cf-flabel">DSH 工作区</label><select class="cf-in" data-f="workspace" id="cf-new-workspace" aria-label="选择 DSH 工作区"></select>'
+    +'<div class="cf-sechint" id="cf-new-ws-hint" style="min-height:14px">'+(HOSTED?'正在读取工作区…':'独立模式没有宿主工作区')+'</div></div>'
     +'<div class="cf-row2">'
     +fld('项目名称','<input class="cf-in" data-f="name" placeholder="如 todo-cli、snake-game">')
     +fld('语言',selHtml('language',langs,'python'))
     +'</div>'
     +fld('需求描述（尽可能具体）','<textarea class="cf-in" rows="5" data-f="brief" placeholder="例：一个命令行待办事项工具，支持添加、完成、列出任务，数据保存为 JSON 文件；提供 --help 说明用法"></textarea>')
     +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="autoRun" checked> <span>生成后自动执行到初版（需求 → 方案 → 代码生成 → 文件写入 → 测试生成）</span></label></div>'
+    +'<div class="cf-setrow"><label>将创建到（只读预览；根目录可在「设置」里修改）</label><div class="cf-artpath" id="cf-new-preview">—</div></div>'
+    +'<div class="cf-sechint" id="cf-new-err" style="color:#f87171;min-height:14px;white-space:pre-wrap"></div>'
     +'</div>'
     +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button><button type="button" class="cf-btn cf-primary" data-act="submit">生成初版</button></div>');
-  bindClose(function(){
-    var d=$('cf-dialog');
-    var name=d.querySelector('[data-f="name"]').value.trim();
-    var brief=d.querySelector('[data-f="brief"]').value.trim();
-    if(!name){toast('请填写项目名称','err');return;}
-    if(!brief){toast('请填写需求描述','err');return;}
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  var wsSel=d.querySelector('#cf-new-workspace');
+  var nameInput=d.querySelector('[data-f="name"]');
+  var errEl=d.querySelector('#cf-new-err');
+  if(wsSel)wsSel.addEventListener('change',function(){updateNewPreview(newWorkspaceOfSelected());});
+  if(nameInput)nameInput.addEventListener('input',function(){
+    clearTimeout(NEWWS.previewTimer);
+    NEWWS.previewTimer=setTimeout(refreshNewPreview,350);
+  });
+  /* 工作区清单先到，项目名预览随后到（refreshNewPreview 也会再拉一次） */
+  if(HOSTED){
+    apiGet('/codeflow/api/workspaces').then(function(res){
+      if(res&&res.ok===true){NEWWS.items=res.workspaces||[];NEWWS.current=res.current||null;NEWWS.message=null;}
+      else{NEWWS.items=[];NEWWS.message=(res&&res.error)||'当前 DSH 未提供工作区接口。';}
+      renderNewWorkspaceSelect();
+      refreshNewPreview();
+    }).catch(function(){
+      NEWWS.items=[];NEWWS.message='读取工作区失败：宿主不可达。';
+      renderNewWorkspaceSelect();
+    });
+  }else{
+    renderNewWorkspaceSelect();
+  }
+  d.querySelector('[data-act="submit"]').addEventListener('click',function(){
+    var name=(d.querySelector('[data-f="name"]').value||'').trim();
+    var brief=(d.querySelector('[data-f="brief"]').value||'').trim();
     var lang=d.querySelector('[data-f="language"]').value;
     var auto=d.querySelector('[data-f="autoRun"]').checked;
-    closeModal();
-    sendMessage('NEW',{project:{name:name,language:lang},brief:brief,autoRun:auto},'CodeFlow · 新建项目');
+    var ws=newWorkspaceOfSelected();
+    errEl.textContent='';
+    if(!name){toast('请填写项目名称','err');return;}
+    if(!brief){toast('请填写需求描述','err');return;}
+    if(!ws){errEl.textContent='请先选择一个 DSH 工作区再新建项目。';return;}
+    var submitBtn=d.querySelector('[data-act="submit"]');
+    if(!HOSTED){
+      var obj0={action:'NEW',rev:G.rev||0,project:{name:name,language:lang},brief:brief,autoRun:auto,workspace:ws.path};
+      openCopyDialog('[CodeFlow:NEW]'+JSON.stringify(obj0));
+      return;
+    }
+    submitBtn.disabled=true;
+    errEl.textContent='正在创建…';
+    queueWrite('action',function(){
+      return {action:'NEW',title:'CodeFlow · 新建项目',graph:G,view:CURVIEW,viewport:[view.x,view.y,view.k],
+        name:name,language:lang,brief:brief,autoRun:auto,workspace:ws.path,project:name};
+    }).then(function(res){
+      closeModal();
+      if(res&&typeof res.rev==='number')syncRev=res.rev;
+      if(res&&res.graph&&valid(res.graph)){
+        G=clone(res.graph);
+        if(!G.meta)G.meta={};
+        renderAll();
+        applyView();
+        if(G.nodes.length)requestAnimationFrame(function(){fitView();});
+      }
+      if(res&&res.delivered===false){
+        showBanner((res.warning||'项目已创建，但 agent 未能接手')+'。画布仍可编辑、导入和保存。');
+      }else{
+        showBanner('已请求 agent：CodeFlow · 新建项目 — 执行完成后画布会自动回填');
+      }
+      if(res&&res.projectDir){PROJECT_DIR=res.projectDir;updateProjectDirTip();}
+      if(res&&res.warning)toast(res.warning,'err');
+      else if(res&&res.file)toast('已创建 '+res.projectDir,'ok');
+    }).catch(function(err){
+      submitBtn.disabled=false;
+      errEl.textContent='';
+      var text=(err&&err.data&&err.data.error)||(err&&err.message)||String(err);
+      if(err&&(err.status===400||err.status===409||err.status===503)){
+        /* 校验错误显示在对话框内（不要只 toast），并给出下一步 */
+        errEl.textContent=text;
+        if(!NEWWS.items.length)refreshNewPreview();
+        return;
+      }
+      if(err&&err.status===409){syncConflict(err);return;}
+      toast('请求失败：'+text,'err');
+    });
+  });
+}
+
+/* v1.2.1：导入项目（浏览选择器 + 落点预检 + 扫描/落点双说明） */
+var IMPORTWS={timer:null,token:0};
+function importDestRefresh(){
+  if(!HOSTED)return;
+  var token=++IMPORTWS.token;
+  var name=(G.project&&G.project.name)||'';
+  apiGet('/codeflow/api/config'+(name?('?project='+encodeURIComponent(name)):'')).then(function(cfg){
+    if(token!==IMPORTWS.token)return;
+    var el=$('cf-import-dest');
+    var errEl=$('cf-import-err');
+    var submit=$('cf-dialog').querySelector('[data-act="submit"]');
+    if(!el)return;
+    if(cfg&&cfg.ok===true){
+      el.textContent=(cfg.root||cfg.defaultRoot||'—')+'/flow-projects/（导入后按项目名落位）';
+      if(errEl)errEl.textContent='';
+      if(submit)submit.disabled=false;
+    }else{
+      el.textContent='—';
+      if(errEl)errEl.textContent=(cfg&&cfg.error)||'未能确定项目文件的落点工作区。';
+      if(submit)submit.disabled=true;
+    }
+  }).catch(function(){
+    var el=$('cf-import-dest');
+    if(el)el.textContent='—';
   });
 }
 function openImportDialog(){
   openModal(dHead('folder-open','导入项目')
     +'<div class="cf-dbody">'
     +'<div class="cf-hintbox">宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 1000 个文件。</div>'
-    +fld('项目路径','<input class="cf-in" data-f="path" placeholder="绝对路径（如 /Users/you/project、~/project）或工作区相对路径（./server）；@ 选中的路径也可直接粘贴">')
+    +fld('项目路径','<div class="cf-setline"><input class="cf-in" data-f="path" id="cf-import-path" placeholder="绝对路径（如 /Users/you/project、~/project）或工作区相对路径（./server）；@ 选中的路径也可直接粘贴">'
+    +'<button type="button" class="cf-btn mini" data-act="browse" data-tooltip="浏览磁盘目录（只读）" aria-label="浏览目录">浏览…</button></div>'
+    +'<div class="cf-sechint" id="cf-import-scan" style="min-height:14px">将扫描：（填写路径或点「浏览…」选择目录）</div>')
     +'<div class="cf-row2">'
     +fld('递归深度',selHtml('depth',['2','4','6','10'],'4'))
     +fld('语言','<input class="cf-in" value="自动检测" disabled>')
     +'</div>'
     +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="fromComments" checked> <span>从注释标记生成任务节点（TODO / FIXME / HACK…）</span></label></div>'
     +'<div class="cf-field"><label class="cf-chk"><input type="checkbox" data-f="addTests" checked> <span>未发现测试文件时，自动添加「测试生成」节点</span></label></div>'
+    +'<div class="cf-setrow"><label>项目文件保存在（与源码目录无关；宿主按当前工作区落位）</label><div class="cf-artpath" id="cf-import-dest">'+(HOSTED?'读取中…':'独立模式：由粘贴目标宿主决定')+'</div></div>'
+    +'<div class="cf-sechint" id="cf-import-err" style="color:#f87171;min-height:14px;white-space:pre-wrap"></div>'
     +'</div>'
     +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button><button type="button" class="cf-btn cf-primary" data-act="submit">开始导入</button></div>');
-  bindClose(function(){
-    var d=$('cf-dialog');
-    var path=d.querySelector('[data-f="path"]').value.trim();
+  var d=$('cf-dialog');
+  var pathInput=d.querySelector('#cf-import-path');
+  var scanEl=d.querySelector('#cf-import-scan');
+  var errEl=d.querySelector('#cf-import-err');
+  function syncScanHint(){
+    var value=String((pathInput&&pathInput.value)||'').trim();
+    if(scanEl)scanEl.textContent=value?('将扫描：'+value):'将扫描：（填写路径或点「浏览…」选择目录）';
+  }
+  if(pathInput)pathInput.addEventListener('input',syncScanHint);
+  var browseBtn=d.querySelector('[data-act="browse"]');
+  if(browseBtn)browseBtn.addEventListener('click',function(){openBrowsePicker(pathInput);});
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  if(HOSTED)importDestRefresh();
+  d.querySelector('[data-act="submit"]').addEventListener('click',function(){
+    var path=(d.querySelector('[data-f="path"]').value||'').trim();
     if(!path){toast('请填写项目路径','err');return;}
     var depth=Number(d.querySelector('[data-f="depth"]').value);
     var fromComments=d.querySelector('[data-f="fromComments"]').checked;
@@ -1727,9 +1942,12 @@ function openImportDialog(){
       path:path,
       depth:depth,
       fromComments:fromComments,
-      addTests:addTests
+      addTests:addTests,
+      project:(G.project&&G.project.name)||undefined
     });
   });
+  if(pathInput)requestAnimationFrame(function(){try{pathInput.focus();}catch(e){}});
+  syncScanHint();
 }
 function openAddDialog(worldPos){
   function listHtml(q){
@@ -2147,6 +2365,9 @@ $('cf-projname').addEventListener('click',function(){
   });
 });
 
+/* ==== v1.2.2：画布控件清单（由 tools/port-canvas.mjs 从 lib/ui/actions.js 注入；只读调试信息，不参与行为） ==== */
+var CF_ACTION_MANIFEST=[{"key":"toolbar:cf-tb-new","id":"cf-tb-new","surface":"toolbar","label":"新建项目","handler":"openNewDialog","enabledWhen":"always","test":"manual:toolbar-new"},{"key":"toolbar:cf-tb-import","id":"cf-tb-import","surface":"toolbar","label":"导入项目","handler":"openImportDialog","enabledWhen":"always","test":"manual:toolbar-import"},{"key":"toolbar:cf-tb-add","id":"cf-tb-add","surface":"toolbar","label":"添加节点","handler":"local:toolbar:add-node","enabledWhen":"always","test":"manual:toolbar-add"},{"key":"toolbar:cf-tb-runall","id":"cf-tb-runall","surface":"toolbar","label":"运行全部","handler":"runAll","enabledWhen":"always","test":"manual:toolbar-runall"},{"key":"toolbar:cf-tb-undo","id":"cf-tb-undo","surface":"toolbar","label":"撤销运行","handler":"openUndoDialog","enabledWhen":"notRunning","test":"auto:undo-button"},{"key":"toolbar:cf-tb-coupling","id":"cf-tb-coupling","surface":"toolbar","label":"耦合分析","handler":"runCouplingAnalysis","enabledWhen":"modules","test":"auto:coupling-button"},{"key":"toolbar:cf-tb-layout","id":"cf-tb-layout","surface":"toolbar","label":"整理布局","handler":"autoLayout","enabledWhen":"always","test":"manual:toolbar-layout"},{"key":"toolbar:cf-tb-fit","id":"cf-tb-fit","surface":"toolbar","label":"适应视图","handler":"fitView","enabledWhen":"always","test":"manual:toolbar-fit"},{"key":"toolbar:cf-tb-settings","id":"cf-tb-settings","surface":"toolbar","label":"设置","handler":"openSettingsDialog","enabledWhen":"hosted","test":"manual:toolbar-settings"},{"key":"toolbar:cf-tb-save","id":"cf-tb-save","surface":"toolbar","label":"保存","handler":"saveProject","enabledWhen":"always","test":"manual:toolbar-save"},{"key":"toolbar:cf-tb-help","id":"cf-tb-help","surface":"toolbar","label":"帮助","handler":"openHelp","enabledWhen":"always","test":"manual:toolbar-help"},{"key":"toolbar:cf-vtab-tasks","id":"cf-vtab-tasks","surface":"toolbar","label":"任务流水线 tab","handler":"switchView","enabledWhen":"bothViews","bind":"pattern:cf-vtab-(tasks|modules)","test":"auto:view-tabs"},{"key":"toolbar:cf-vtab-modules","id":"cf-vtab-modules","surface":"toolbar","label":"模块结构图 tab","handler":"switchView","enabledWhen":"bothViews","bind":"pattern:cf-vtab-(tasks|modules)","test":"auto:view-tabs"},{"key":"status:cf-session","id":"cf-session","surface":"status","label":"会话入口（打开会话详情）","handler":"openSessionDialog","enabledWhen":"hosted","test":"auto:session-chip"},{"key":"status:cf-projname","id":"cf-projname","surface":"status","label":"项目名（点击重命名）","handler":"local:status:rename-project","enabledWhen":"always","test":"manual:projname"},{"key":"banner:cf-banner-retry","id":"cf-banner-retry","surface":"banner","label":"重试（重发本次运行）","handler":"local:banner:retry-run","enabledWhen":"issue","test":"manual:banner-retry"},{"key":"banner:cf-banner-x","id":"cf-banner-x","surface":"banner","label":"关闭横幅","handler":"local:banner:close","enabledWhen":"always","test":"auto:banner-close"},{"key":"empty:cf-empty-new","id":"cf-empty-new","surface":"empty","label":"新建项目","handler":"openNewDialog","enabledWhen":"always","test":"manual:empty-new"},{"key":"empty:cf-empty-import","id":"cf-empty-import","surface":"empty","label":"导入项目","handler":"openImportDialog","enabledWhen":"always","test":"manual:empty-import"},{"key":"zoom:cf-z-in","id":"cf-z-in","surface":"zoom","label":"放大","handler":"local:zoom:in","enabledWhen":"always","test":"manual:zoom-in"},{"key":"zoom:cf-z-out","id":"cf-z-out","surface":"zoom","label":"缩小","handler":"local:zoom:out","enabledWhen":"always","test":"manual:zoom-out"},{"key":"zoom:cf-z-fit","id":"cf-z-fit","surface":"zoom","label":"缩放到全部节点","handler":"fitView","enabledWhen":"always","test":"manual:zoom-fit"},{"key":"nav:cf-navbtn","selector":".cf-navbtn","surface":"nav","label":"分类定位按钮（循环生成）","handler":"local:nav:focus-category","dynamic":true,"enabledWhen":"always","test":"auto:nav-buttons"},{"key":"navpop:cf-navrow","selector":".cf-navrow","surface":"navpop","label":"二级浮层节点行（循环生成）","handler":"local:navpop:pick-row","dynamic":true,"enabledWhen":"always","test":"auto:navpop-rows"},{"key":"node:dblclick-details","selector":".cf-node","surface":"node","label":"双击节点查看详情（ROOT 委托 onDbl）","handler":"openDetails","dynamic":true,"bind":"delegate:node-dblclick","enabledWhen":"always","test":"manual:node-details"},{"key":"node:contextmenu","selector":".cf-node","surface":"node","label":"节点右键菜单（ROOT 委托）","handler":"openNodeMenu","dynamic":true,"bind":"delegate:node-contextmenu","enabledWhen":"always","test":"manual:node-menu"},{"key":"link:contextmenu","selector":".cf-link-hit","surface":"link","label":"连线右键菜单（ROOT 委托）","handler":"openLinkMenu","dynamic":true,"bind":"delegate:link-contextmenu","enabledWhen":"always","test":"manual:link-menu"},{"key":"canvas:contextmenu","selector":"#codeflow-canvas","surface":"canvas","label":"空白右键菜单（ROOT 委托）","handler":"openCanvasMenu","dynamic":true,"bind":"delegate:canvas-contextmenu","enabledWhen":"always","test":"manual:canvas-menu"},{"key":"monitor:cf-monitor-head","selector":".cf-monitor-head","surface":"monitor","label":"执行监视器标题（折叠/展开）","handler":"local:monitor:collapse","dynamic":true,"enabledWhen":"always","test":"auto:monitor-collapse"},{"key":"card:cf-coupling-card","selector":".cf-coupling-card","surface":"card","label":"耦合卡片（打开详情）","handler":"openCouplingDetails","dynamic":true,"enabledWhen":"always","test":"auto:coupling-card"},{"key":"detail:cf-think-bottom","selector":".cf-think-bottom","surface":"detail","label":"思考流「回到底部」","handler":"local:detail:scroll-bottom","dynamic":true,"enabledWhen":"always","test":"auto:think-bottom"},{"key":"dialog:common:close","selector":"[data-act=\"close\"]","surface":"dialog","label":"关闭对话框（dHead ✕ / 关闭 / 开始使用）","handler":"closeModal","dynamic":true,"bind":"delegate:dialog-close","enabledWhen":"always","test":"auto:dialog-close"},{"key":"dialog:common:cancel","selector":"[data-act=\"cancel\"]","surface":"dialog","label":"取消（撤销/新建/设置/拖拽等）","handler":"closeModal","dynamic":true,"bind":"delegate:dialog-close","enabledWhen":"always","test":"auto:dialog-cancel"},{"key":"dialog:new:submit","selector":"[data-act=\"submit\"]","surface":"dialog:new","label":"生成初版","handler":"local:dialog:new-submit","dynamic":true,"enabledWhen":"always","test":"manual:new-submit"},{"key":"dialog:import:submit","selector":"[data-act=\"submit\"]","surface":"dialog:import","label":"开始导入","handler":"local:dialog:import-submit","dynamic":true,"enabledWhen":"always","test":"manual:import-submit"},{"key":"dialog:import:browse","selector":"[data-act=\"browse\"]","surface":"dialog:import","label":"浏览…（目录选择器）","handler":"openBrowsePicker","dynamic":true,"enabledWhen":"always","test":"manual:import-browse"},{"key":"dialog:confirm:submit","selector":"[data-act=\"submit\"]","surface":"dialog:confirm","label":"确定（openConfirm：清空画布/新建会话等）","handler":"local:dialog:confirm-ok","dynamic":true,"enabledWhen":"always","test":"manual:confirm-ok"},{"key":"dialog:prompt:submit","selector":"[data-act=\"submit\"]","surface":"dialog:prompt","label":"确定（openPrompt：重命名等）","handler":"local:dialog:prompt-ok","dynamic":true,"enabledWhen":"always","test":"manual:prompt-ok"},{"key":"dialog:add:row","selector":".cf-trow","surface":"dialog:add","label":"节点类型行（点击添加）","handler":"local:dialog:add-pick","dynamic":true,"enabledWhen":"always","test":"manual:add-row"},{"key":"dialog:details:session","selector":"[data-act=\"session\"]","surface":"dialog:details","label":"在会话中查看完整过程","handler":"openSessionDialog","dynamic":true,"enabledWhen":"hosted","test":"manual:details-session"},{"key":"dialog:coupling:rerun","selector":"[data-act=\"rerun\"]","surface":"dialog:coupling","label":"重新分析（耦合详情）","handler":"runCouplingAnalysis","dynamic":true,"enabledWhen":"modules","test":"auto:coupling-rerun"},{"key":"dialog:session:open","selector":"[data-act=\"open\"]","surface":"dialog:session","label":"打开会话","handler":"requestOpenSession","dynamic":true,"enabledWhen":"session","test":"manual:session-open"},{"key":"dialog:session:copy","selector":"[data-act=\"copy\"]","surface":"dialog:session","label":"复制会话 ID","handler":"copyText","dynamic":true,"enabledWhen":"session","test":"manual:session-copy"},{"key":"dialog:session:new","selector":"[data-act=\"new\"]","surface":"dialog:session","label":"新建会话","handler":"rebindSession","dynamic":true,"enabledWhen":"always","test":"manual:session-new"},{"key":"dialog:undo:restore","selector":"[data-run]","surface":"dialog:undo","label":"撤销这次运行（预检行）","handler":"confirmUndo","dynamic":true,"enabledWhen":"notRunning","test":"manual:undo-restore"},{"key":"dialog:undoconfirm:confirm","selector":"[data-act=\"confirm\"]","surface":"dialog:undoconfirm","label":"撤销（预检确认框）","handler":"local:dialog:undo-confirm","dynamic":true,"enabledWhen":"always","test":"manual:undo-confirm"},{"key":"dialog:settings:save","selector":"[data-act=\"save\"]","surface":"dialog:settings","label":"保存设置","handler":"local:dialog:settings-save","dynamic":true,"enabledWhen":"always","test":"manual:settings-save"},{"key":"dialog:settings:reset-root","selector":"[data-act=\"reset-root\"]","surface":"dialog:settings","label":"恢复默认根目录","handler":"local:dialog:settings-reset-root","dynamic":true,"enabledWhen":"always","test":"manual:settings-reset-root"},{"key":"dialog:settings:reset-dir","selector":"[data-act=\"reset-dir\"]","surface":"dialog:settings","label":"恢复默认项目目录","handler":"local:dialog:settings-reset-dir","dynamic":true,"enabledWhen":"always","test":"manual:settings-reset-dir"},{"key":"dialog:drop:import","selector":"[data-act=\"import\"]","surface":"dialog:drop","label":"导入（拖拽确认框）","handler":"local:dialog:drop-import","dynamic":true,"enabledWhen":"always","test":"manual:drop-import"},{"key":"dialog:dropconflict:rename","selector":"[data-act=\"rename\"]","surface":"dialog:dropconflict","label":"改名（冲突框）","handler":"local:dialog:conflict-rename","dynamic":true,"enabledWhen":"always","test":"manual:conflict-rename"},{"key":"dialog:dropconflict:overwrite","selector":"[data-act=\"overwrite\"]","surface":"dialog:dropconflict","label":"覆盖（冲突框）","handler":"local:dialog:conflict-overwrite","dynamic":true,"enabledWhen":"always","test":"manual:conflict-overwrite"},{"key":"browse:roots","selector":"[data-b=\"roots\"]","surface":"browse","label":"根目录","handler":"browseLoadRoots","dynamic":true,"enabledWhen":"always","test":"manual:browse-roots"},{"key":"browse:up","selector":"[data-b=\"up\"]","surface":"browse","label":"上一级","handler":"browseGoUp","dynamic":true,"enabledWhen":"always","test":"manual:browse-up"},{"key":"browse:cancel","selector":"[data-b=\"cancel\"]","surface":"browse","label":"取消","handler":"closeBrowsePicker","dynamic":true,"enabledWhen":"always","test":"manual:browse-cancel"},{"key":"browse:pick","id":"cf-browse-pick","selector":"[data-b=\"pick\"]","surface":"browse","label":"选择此目录","handler":"browsePick","dynamic":true,"enabledWhen":"always","test":"manual:browse-pick"},{"key":"browse:retry","selector":"[data-b=\"retry\"]","surface":"browse","label":"重试（读取失败后）","handler":"local:browse:retry","dynamic":true,"enabledWhen":"always","test":"manual:browse-retry"},{"key":"browse:row","selector":".cf-browse-row","surface":"browse","label":"目录行（单击选中 / 双击进入）","handler":"local:browse:select-row","dynamic":true,"enabledWhen":"always","test":"manual:browse-row"},{"key":"browse:crumb","selector":".cf-browse-crumb","surface":"browse","label":"面包屑回跳","handler":"local:browse:crumb","dynamic":true,"bind":"markers","markers":["querySelectorAll('[data-crumb]')"],"enabledWhen":"always","test":"manual:browse-crumb"},{"key":"features:chip-x","selector":".cf-fchip-x","surface":"features","label":"chip 移除节点","handler":"local:features:chip-remove","dynamic":true,"enabledWhen":"always","test":"manual:features-chip-x"},{"key":"features:chip-add","selector":".cf-fchip-add","surface":"features","label":"把选中节点加入分组","handler":"local:features:chip-add","dynamic":true,"enabledWhen":"always","test":"manual:features-chip-add"},{"key":"features:group-row","selector":".cf-fgroup","surface":"features","label":"分组行（点击整组高亮 / 右键组菜单）","handler":"spotlightGroup","dynamic":true,"enabledWhen":"always","test":"manual:features-group-row"},{"key":"features:farrow","selector":".cf-farrow","surface":"features","label":"分组展开/收起箭头","handler":"local:features:toggle-group","dynamic":true,"enabledWhen":"always","test":"manual:features-farrow"},{"key":"features:empty-btn","selector":".cf-fempty-btn","surface":"features","label":"让 agent 识别（空分组横幅）","handler":"local:features:recognize","dynamic":true,"enabledWhen":"hosted","test":"manual:features-empty-btn"},{"key":"menu:canvas:new-project","surface":"menu:canvas","label":"新建项目…","handler":"openNewDialog","dynamic":true,"enabledWhen":"always","test":"manual:menu-canvas-new"},{"key":"menu:canvas:import","surface":"menu:canvas","label":"导入项目…","handler":"openImportDialog","dynamic":true,"enabledWhen":"always","test":"manual:menu-canvas-import"},{"key":"menu:canvas:analyze-all-coupling","surface":"menu:canvas","label":"分析全部耦合","handler":"runCouplingAnalysis","dynamic":true,"enabledWhen":"modules","test":"manual:menu-canvas-coupling"},{"key":"menu:node:run","surface":"menu:node","label":"运行此节点（含上游）","handler":"runNode","dynamic":true,"enabledWhen":"always","test":"manual:menu-node-run"},{"key":"menu:node:rerun","surface":"menu:node","label":"重跑此节点","handler":"runNode","dynamic":true,"enabledWhen":"always","test":"manual:menu-node-rerun"},{"key":"menu:node:analyze-coupling","surface":"menu:node","label":"分析耦合","handler":"runCouplingAnalysis","dynamic":true,"enabledWhen":"modules","test":"manual:menu-node-coupling"},{"key":"menu:node:delete","surface":"menu:node","label":"删除节点","handler":"deleteSel","dynamic":true,"enabledWhen":"always","test":"manual:menu-node-delete"},{"key":"menu:link:delete","surface":"menu:link","label":"删除连线","handler":"deleteSel","dynamic":true,"enabledWhen":"always","test":"manual:menu-link-delete"},{"key":"menu:features:refresh","surface":"menu:features","label":"重新识别（功能分组）","handler":"refreshFeatures","dynamic":true,"enabledWhen":"always","test":"manual:menu-features-refresh"}];
+try{window.__CF_ACTION_MANIFEST__=CF_ACTION_MANIFEST;}catch(e){}
 
 /* ================= v0.6.0：双视图 / 编辑高亮 ================= */
 var CURVIEW=(HOSTED&&BOOT.activeView==='modules')?'modules':'tasks';
@@ -2851,6 +3072,11 @@ function initCanvasExtras(){
   /* 撤销按钮的 click 绑定（v0.5.2 起只有 Ctrl+Alt+Z 生效，按钮本身漏绑了） */
   var undoBtn=$('cf-tb-undo');
   if(undoBtn)undoBtn.addEventListener('click',openUndoDialog);
+  /* v1.2.2：会话 chip 的 click 绑定。此前 #cf-session 只被 renderSessionChip()
+     改文本、从未绑过 click——一个可聚焦但无动作的假按钮；点开与会话详情
+     「在会话中查看完整过程」走同一个 openSessionDialog 入口。 */
+  var sessionBtn=$('cf-session');
+  if(sessionBtn)sessionBtn.addEventListener('click',openSessionDialog);
   /* v1.0：设置入口只在宿主模式显示（独立预览隐藏） */
   var settingsBtn=$('cf-tb-settings');
   if(settingsBtn){
@@ -3854,6 +4080,12 @@ function initCouplingExtras(){
     if(btn)btn.hidden=true;
     return;
   }
+  /* v1.2.2：工具栏按钮的 click 绑定。此前 runCouplingAnalysis 只能从节点右键、
+     空白右键、耦合详情「重新分析」进入，工具栏按钮在 HTML 里是 disabled 且
+     从未绑过 click——永远点不动。只绑一次：initCouplingExtras 整个生命周期
+     只执行一次（IIFE 尾部的 boot 后挂钩），不存在重复绑定。 */
+  var cbtn=$('cf-tb-coupling');
+  if(cbtn)cbtn.addEventListener('click',function(){runCouplingAnalysis(null);});
   ensureCouplingCard();
   renderCouplingCard();
   applyCouplingMarks();
@@ -4010,7 +4242,7 @@ function startDropDirectory(entry,extra){
     if(DROP.cancelled)return;
     if(out.length===0){toast('该文件夹是空的，没有可导入的文件','err');return;}
     if(out.length>1000){toast('文件数超过 1000，已拒绝导入','err');return;}
-    if(state.bytes>500*1024*1024){toast('解压后超过 500 MB，已拒绝导入','err');return;}
+    if(state.bytes>2048*1024*1024){toast('解压后超过 2048 MB，已拒绝导入','err');return;}
     if(extra)toast(extra);
     openDropConfirm({
       kind:'dir',name:entry.name,files:out.length,bytes:state.bytes,
@@ -4021,7 +4253,7 @@ function startDropDirectory(entry,extra){
 
 /* ---- 压缩包流（单文件）：确认 → 上传本体 → finalize ---- */
 function startDropArchiveFile(file,extra){
-  if(file.size>500*1024*1024){toast('压缩包超过 500 MB，已拒绝导入','err');return;}
+  if(file.size>2048*1024*1024){toast('压缩包超过 2048 MB，已拒绝导入','err');return;}
   if(extra)toast(extra);
   DROP.cancelled=false;
   openDropConfirm({
@@ -4155,9 +4387,10 @@ function uploadDirectory(out,state,opts){
       });
       return chain.then(function(){
         if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
-        dropStage('正在分析…','正在生成任务流水线与模块结构图（宿主本地执行）');
-        return apiPost('drop/finalize',{token:res.token,kind:'dir',projectName:opts.name,
-          depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
+          dropStage('正在分析…','正在生成任务流水线与模块结构图（宿主本地执行）');
+          return apiPost('drop/finalize',{token:res.token,kind:'dir',projectName:opts.name,
+            project:(G.project&&G.project.name)||undefined,
+            depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
       });
     })
     .then(function(res){finishDropImport(res,opts,'folder');})
@@ -4197,6 +4430,7 @@ function uploadArchive(file,opts){
           if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
           dropStage('正在解压…','宿主正在解压 '+file.name+'（zip/tar 本地解析；7z/rar 用系统工具）');
           return apiPost('drop/finalize',{token:res.token,kind:'archive',projectName:opts.name,
+            project:(G.project&&G.project.name)||undefined,
             depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
         });
     })
@@ -4273,12 +4507,484 @@ function finishDropImport(res,opts,kindLabel){
 
 /* ---- 真实路径通道（薄分支）：宿主桥接可用且拿到路径时，就地导入 ---- */
 function dropViaPath(path,kind,opts){
-  return apiPost('drop/path',Object.assign({path:path,kind:kind,depth:opts.depth,
+  return apiPost('drop/path',Object.assign({path:path,kind:kind,project:(G.project&&G.project.name)||undefined,
+    depth:opts.depth,
     fromComments:opts.fromComments,addTests:opts.addTests},opts.rename?{rename:true}:{},opts.overwrite?{overwrite:true}:{},opts.projectName?{projectName:opts.projectName}:{}));
+}
+/* ================= v1.2.1：导入目录树选择器 =================
+ * 手感参照 DSH 输入框的 @ 弹层：打开即聚焦、键盘全程可操作（↑/↓ 选择、
+ * Enter 进入、Backspace 上一级、Esc 关闭）、逐级浏览（不是扁平下拉、不是
+ * 系统对话框）。数据只来自只读的 GET /codeflow/api/browse（宿主侧不跟链接、
+ * 只列目录、单次 500 项、5s 超时）；画布不读磁盘、不自己拼路径——父目录、
+ * 规范化路径都以服务端返回为准。
+ * 打开时以路径输入框当前值为初始目录；非法/为空则从根清单开始。回填后
+ * 不自动提交导入；所有动态文本一律 esc()。 */
+var BROWSE={open:false,overlay:null,dir:null,parent:null,entries:[],truncated:false,
+  filter:'',active:-1,loading:false,error:null,rootsMode:false,input:null,anchor:null,pending:null,note:null};
+
+function browseFetch(path){
+  var q=path?('?path='+encodeURIComponent(path)):'';
+  return apiGet('/codeflow/api/browse'+q);
+}
+
+/* ---- 打开 / 关闭 ---- */
+function ensureBrowseOverlay(){
+  if(BROWSE.overlay&&BROWSE.overlay.isConnected)return BROWSE.overlay;
+  var el=document.createElement('div');
+  el.className='cf-browse';
+  el.setAttribute('role','dialog');
+  el.setAttribute('aria-label','选择目录');
+  el.innerHTML='<div class="cf-browse-card">'
+    +'<div class="cf-browse-head">'
+    +'<span class="cf-browse-title"><i data-lucide="folder-open"></i>选择目录</span>'
+    +'<button type="button" class="cf-btn mini" data-b="roots" title="回到根清单（盘符 / 主目录 / 工作区）">根目录</button>'
+    +'<button type="button" class="cf-btn mini" data-b="up" title="上一级（Backspace）">上一级</button>'
+    +'</div>'
+    +'<div class="cf-browse-crumbs" id="cf-browse-crumbs"></div>'
+    +'<input class="cf-in cf-browse-filter" id="cf-browse-filter" type="text" placeholder="过滤当前层级的子目录…" aria-label="过滤子目录">'
+    +'<div class="cf-browse-list" id="cf-browse-list" role="listbox" aria-label="子目录列表"></div>'
+    +'<div class="cf-browse-status" id="cf-browse-status"></div>'
+    +'<div class="cf-dfoot" style="padding-top:8px">'
+    +'<button type="button" class="cf-btn" data-b="cancel">取消</button>'
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="cf-btn cf-primary" data-b="pick" id="cf-browse-pick">选择此目录</button>'
+    +'</div></div>';
+  ROOT.appendChild(el);
+  BROWSE.overlay=el;
+  el.addEventListener('keydown',function(e){
+    if(!BROWSE.open)return;
+    onBrowseKeydown(e);
+    e.stopPropagation();
+  });
+  el.addEventListener('pointerdown',function(e){e.stopPropagation();},true);
+  el.querySelector('[data-b="cancel"]').addEventListener('click',function(){closeBrowsePicker();});
+  el.querySelector('[data-b="up"]').addEventListener('click',function(){browseGoUp();});
+  el.querySelector('[data-b="roots"]').addEventListener('click',function(){browseLoadRoots();});
+  el.querySelector('[data-b="pick"]').addEventListener('click',function(){browsePick();});
+  $('cf-browse-filter').addEventListener('input',function(e){
+    BROWSE.filter=String(e.target.value||'');
+    BROWSE.active=0;
+    browseRenderList();
+  });
+  return el;
+}
+function openBrowsePicker(input){
+  BROWSE.input=input||null;
+  BROWSE.open=true;
+  BROWSE.filter='';
+  BROWSE.error=null;
+  BROWSE.active=-1;
+  var el=ensureBrowseOverlay();
+  el.hidden=false;
+  var initial=String((input&&input.value)||'').trim();
+  if(initial){
+    browseLoad(initial,true);
+  }else{
+    browseLoadRoots();
+  }
+  try{$('cf-browse-filter').focus();}catch(e){}
+}
+function closeBrowsePicker(){
+  if(!BROWSE.open)return;
+  BROWSE.open=false;
+  if(BROWSE.overlay)BROWSE.overlay.hidden=true;
+  BROWSE.entries=[];BROWSE.active=-1;BROWSE.error=null;BROWSE.rootsMode=false;
+  var input=BROWSE.input;
+  BROWSE.input=null;
+  if(input){try{input.focus({preventScroll:true});}catch(e){}}
+}
+/* Esc 闸门：模板的全局 Escape 处理会关掉整个导入对话框；浏览弹层打开时
+   必须只关自己。port-canvas 已把模板的 Escape 分支改为先问这里。 */
+function closeBrowseOnEscape(){
+  if(!BROWSE.open)return false;
+  closeBrowsePicker();
+  return true;
+}
+
+/* ---- 数据加载 ---- */
+function browseSetLoading(target){
+  BROWSE.loading=true;BROWSE.error=null;
+  BROWSE.pending=target;
+  browseRenderStatus();
+  browseRenderList();
+  browseRenderCrumbs();
+}
+function browseLoad(path,allowRootsFallback){
+  browseSetLoading(path);
+  browseFetch(path).then(function(res){
+    BROWSE.loading=false;
+    if(!res||res.ok!==true){
+      var message=(res&&res.error)||('读取失败（HTTP '+(res&&res.status||'')+'）');
+      if(allowRootsFallback){BROWSE.error=null;enterBrowseRoots(res,message);}
+      else browseFail(message,res);
+      return;
+    }
+    if(res.roots===true||res.path===null){
+      BROWSE.rootsMode=true;BROWSE.dir=null;BROWSE.parent=null;
+    }else{
+      BROWSE.rootsMode=false;BROWSE.dir=res.path;BROWSE.parent=res.parent;
+    }
+    BROWSE.entries=res.entries||[];
+    BROWSE.truncated=res.truncated===true;
+    BROWSE.filter='';BROWSE.active=-1;BROWSE.error=null;BROWSE.note=null;
+    var box=$('cf-browse-filter');
+    if(box){box.value='';box.placeholder='过滤当前层级的子目录…';}
+    browseRenderAll();
+  }).catch(function(err){
+    BROWSE.loading=false;
+    var message=(err&&err.message)||String(err);
+    if(allowRootsFallback){enterBrowseRoots(null,message);return;}
+    browseFail(message,null);
+  });
+}
+/* 初始值非法/为空 → 从根清单开始（C1）；原错误作为一条提示展示，不关弹窗 */
+function enterBrowseRoots(res,message){
+  browseLoadRoots(message?('打开「'+String(BROWSE.pending||'').slice(0,80)+'」失败：'+message+'；已回到根清单。'):null);
+  BROWSE.pending=null;
+}
+function browseLoadRoots(note){
+  BROWSE.pending=null;
+  browseSetLoading(null);
+  browseFetch('').then(function(res){
+    BROWSE.loading=false;
+    if(!res||res.ok!==true){browseFail((res&&res.error)||'读取根清单失败',res);return;}
+    BROWSE.rootsMode=true;BROWSE.dir=null;BROWSE.parent=null;
+    BROWSE.entries=res.entries||[];
+    BROWSE.truncated=res.truncated===true;
+    BROWSE.filter='';BROWSE.active=-1;BROWSE.error=null;BROWSE.note=note||null;
+    var box=$('cf-browse-filter');
+    if(box){box.value='';box.placeholder='过滤根位置…';}
+    browseRenderAll();
+  }).catch(function(err){BROWSE.loading=false;browseFail((err&&err.message)||String(err),null);});
+}
+function browseFail(message,res){
+  BROWSE.error=message;
+  if(res&&res.code==='BROWSE_TIMEOUT')BROWSE.error=message+'（网络位置可能已断开）';
+  browseRenderStatus();
+  browseRenderList();
+}
+function browseEnter(entry){
+  if(!entry||typeof entry.path!=='string')return;
+  browseLoad(entry.path,false);
+}
+function browseGoUp(){
+  if(BROWSE.rootsMode)return;
+  if(BROWSE.loading)return;
+  if(typeof BROWSE.parent==='string'&&BROWSE.parent.length>0){browseLoad(BROWSE.parent,false);}
+  else browseLoadRoots();
+}
+
+/* ---- 渲染 ---- */
+function browseRenderAll(){
+  browseRenderCrumbs();
+  browseRenderList();
+  browseRenderStatus();
+}
+function browseVisibleEntries(){
+  var q=BROWSE.filter.trim().toLowerCase();
+  if(!q)return BROWSE.entries;
+  return BROWSE.entries.filter(function(entry){return String(entry.name||'').toLowerCase().indexOf(q)>=0;});
+}
+function browseRenderCrumbs(){
+  var box=$('cf-browse-crumbs');
+  if(!box)return;
+  if(BROWSE.loading&&BROWSE.pending){box.innerHTML='<span class="cf-browse-crumb-dim">正在打开…</span>';return;}
+  if(BROWSE.rootsMode){box.innerHTML='<span class="cf-browse-crumb-dim">选择一个根位置进入</span>';return;}
+  if(!BROWSE.dir){box.innerHTML='';return;}
+  var crumbs=browseCrumbsOf(BROWSE.dir);
+  var html='';
+  crumbs.forEach(function(crumb,i){
+    var last=i===crumbs.length-1;
+    html+='<button type="button" class="cf-browse-crumb'+(last?' current':'')+'" data-crumb="'+esc(crumb.path)+'"'
+      +(last?' disabled':'')+' title="'+esc(crumb.path)+'">'+esc(crumb.name)+'</button>';
+    if(!last)html+='<span class="cf-browse-sep">›</span>';
+  });
+  box.innerHTML=html;
+  Array.prototype.forEach.call(box.querySelectorAll('[data-crumb]'),function(btn){
+    btn.addEventListener('click',function(){
+      if(BROWSE.loading)return;
+      browseLoad(btn.getAttribute('data-crumb'),false);
+    });
+  });
+}
+/* 面包屑拆解只用于**展示**；点击回跳发出的是服务端先前给出的完整路径 */
+function browseCrumbsOf(dir){
+  var sep=dir.indexOf('\\')>=0?'\\':'/';
+  var parts=dir.split(sep).filter(function(part){return part.length>0;});
+  var crumbs=[];
+  var acc=dir.startsWith('\\\\')?'\\\\':(sep==='\\'&&/^[a-zA-Z]:/.test(dir)?'':'/');
+  if(dir.startsWith('\\\\')){
+    acc='\\\\'+parts[0];
+    crumbs.push({name:'\\\\'+parts[0],path:acc});
+    parts=parts.slice(1);
+  }else if(sep==='\\'&&/^[a-zA-Z]:/.test(dir)){
+    acc=dir.slice(0,2);
+    crumbs.push({name:acc,path:acc+'\\'});
+  }
+  for(var i=0;i<parts.length;i++){
+    acc=acc===undefined||acc===''?sep+parts[i]:(acc.endsWith(sep)?acc+parts[i]:acc+sep+parts[i]);
+    crumbs.push({name:parts[i],path:acc});
+  }
+  return crumbs;
+}
+function browseFolderGlyph(){
+  var body=(typeof ICONS!=='undefined'&&ICONS['folder-open'])||'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>';
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+body+'</svg>';
+}
+function browseRenderList(){
+  var list=$('cf-browse-list');
+  if(!list)return;
+  if(BROWSE.loading){list.innerHTML='<div class="cf-browse-empty"><span class="cf-act-spin">◐</span> 正在读取…</div>';return;}
+  if(BROWSE.error){list.innerHTML='';return;}
+  var items=browseVisibleEntries();
+  if(BROWSE.active>=items.length)BROWSE.active=items.length>0?items.length-1:-1;
+  if(!items.length){
+    list.innerHTML='<div class="cf-browse-empty">'+(BROWSE.filter?'没有匹配的项':'没有子目录（仍可选择当前目录）')+'</div>';
+    browseRenderPickButton(items);
+    return;
+  }
+  var html='';
+  items.forEach(function(entry,i){
+    html+='<div class="cf-browse-row'+(i===BROWSE.active?' active':'')+'" role="option" data-i="'+i+'" aria-selected="'+(i===BROWSE.active?'true':'false')+'" tabindex="-1">'
+      +'<span class="cf-browse-glyph">'+browseFolderGlyph()+'</span>'
+      +'<span class="cf-browse-name" title="'+esc(entry.path)+'">'+esc(entry.name)+'</span>'
+      +(entry.kind==='root'?'<span class="cf-browse-kind">根位置</span>':'')
+      +'</div>';
+  });
+  if(BROWSE.truncated)html+='<div class="cf-browse-truncated">仅显示前 '+BROWSE.entries.length+' 项；请用过滤框缩小范围或进入更深的层级</div>';
+  list.innerHTML=html;
+  Array.prototype.forEach.call(list.querySelectorAll('.cf-browse-row'),function(row){
+    var index=Number(row.getAttribute('data-i'));
+    row.addEventListener('click',function(){browseSelectIndex(index);});
+    row.addEventListener('dblclick',function(){
+      var entry=browseVisibleEntries()[index];
+      browseEnter(entry);
+    });
+  });
+  browseRenderPickButton(items);
+  scrollBrowseActive();
+}
+function browseRenderPickButton(items){
+  var btn=$('cf-browse-pick');
+  if(!btn)return;
+  var selected=(items||browseVisibleEntries())[BROWSE.active];
+  if(BROWSE.rootsMode){
+    btn.disabled=!selected;
+    btn.textContent=selected?('选择 '+selected.name):'选择此目录';
+  }else{
+    btn.disabled=false;
+    btn.textContent=selected?('选择 '+selected.name):'选择此目录';
+  }
+}
+function browseSelectIndex(index){
+  BROWSE.active=index;
+  Array.prototype.forEach.call($('cf-browse-list').querySelectorAll('.cf-browse-row'),function(row,i){
+    row.classList.toggle('active',i===index);
+    row.setAttribute('aria-selected',i===index?'true':'false');
+  });
+  browseRenderPickButton();
+  scrollBrowseActive();
+}
+function scrollBrowseActive(){
+  var active=$('cf-browse-list').querySelector('.cf-browse-row.active');
+  if(active&&active.scrollIntoView)try{active.scrollIntoView({block:'nearest'});}catch(e){}
+}
+function browseRenderStatus(){
+  var box=$('cf-browse-status');
+  if(!box)return;
+  if(BROWSE.loading){box.innerHTML='';return;}
+  var html='';
+  if(BROWSE.note)html+='<span class="cf-browse-note">'+esc(BROWSE.note)+'</span>';
+  if(BROWSE.error){
+    html+='<span class="cf-browse-error">'+esc(BROWSE.error)+'</span>'
+      +'<button type="button" class="cf-btn mini" data-b="retry">重试</button>';
+    box.innerHTML=html;
+    box.querySelector('[data-b="retry"]').addEventListener('click',function(){
+      BROWSE.error=null;
+      if(BROWSE.rootsMode)browseLoadRoots();
+      else if(BROWSE.dir)browseLoad(BROWSE.dir,false);
+      else browseLoadRoots();
+    });
+    return;
+  }
+  if(BROWSE.rootsMode)html+='<span class="cf-browse-hint">进入一个根位置后，再选择具体目录</span>';
+  else if(BROWSE.dir)html+='<span class="cf-browse-hint" title="'+esc(BROWSE.dir)+'">当前：'+esc(BROWSE.dir)+'</span>';
+  box.innerHTML=html;
+}
+
+/* ---- 键盘 ---- */
+function onBrowseKeydown(e){
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    var items=browseVisibleEntries();
+    if(items.length){var nx=Math.min(items.length-1,BROWSE.active+1);browseSelectIndex(nx);}
+  }else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    var list=browseVisibleEntries();
+    if(list.length){var pv=Math.max(0,BROWSE.active-1);browseSelectIndex(pv);}
+  }else if(e.key==='Enter'){
+    e.preventDefault();
+    var entry=browseVisibleEntries()[Math.max(0,BROWSE.active)];
+    if(entry)browseEnter(entry);
+  }else if(e.key==='Backspace'){
+    e.preventDefault();
+    browseGoUp();
+  }
+}
+
+/* ---- 回填（不自动提交） ---- */
+function browsePick(){
+  var items=browseVisibleEntries();
+  var selected=items[BROWSE.active];
+  var value=BROWSE.rootsMode?(selected?selected.path:null):(selected?selected.path:BROWSE.dir);
+  if(typeof value!=='string'||value.length===0)return;
+  var input=BROWSE.input;
+  closeBrowsePicker();
+  if(input){
+    input.value=value;
+    try{input.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}
+  }
+}
+/* ================= v1.2.2：工作与报错日志（浏览器半边） =================
+ * 画布是同源 iframe：浏览器侧异常、按钮失败、fetch 失败此前没有落盘通道。
+ * 本补丁给画布加**一个**捕获阶段 click 监听 + 全局 error/rejection 钩子 +
+ * 批量上报器（POST /codeflow/api/log，服务端白名单 + 限流）。
+ *
+ * 红线（任务书 §8.4）：
+ *   - 不记录表单值、路径输入、提示词、图 JSON；project 名可以记录；
+ *   - 控件标识只取 id/data-act/aria-label/文本（≤80 字符）；
+ *   - data-cf-nolog="1" 的控件跳过；同一控件 300ms 内重复点击只记一次；
+ *   - 队列 ≤200 条，500ms 或 20 条触发一次上报；序列化超 48 KiB 拆批；
+ *     keepalive:true；失败静默丢弃并累计 dropped——绝不 toast、绝不重试风暴；
+ *   - 页面卸载时 sendBeacon/fetch(keepalive) 冲一次；失败不阻塞卸载；
+ *   - 日志关闭（CODEFLOW_LOG=off）时客户端照发、服务端丢弃；画布不读环境变量。
+ * 所有动态文本一律 esc()，本补丁不渲染任何 UI。 */
+var CFLOG={queue:[],dropped:0,timer:null,lastClick:{key:'',at:0},sending:false};
+
+function cflogProject(){return (G&&G.project&&G.project.name)||null;}
+function cflogControlOf(el){
+  if(!el)return null;
+  var label=(el.id?('#'+el.id):(el.getAttribute('data-act')?('@'+el.getAttribute('data-act')):''))
+    ||el.getAttribute('aria-label')||String(el.textContent||'').trim();
+  return String(label).slice(0,80)||'unnamed';
+}
+function cflogSurfaceOf(el){
+  try{
+    var mf=window.__CF_ACTION_MANIFEST__;
+    if(Array.isArray(mf)){
+      for(var i=0;i<mf.length;i++){
+        var e=mf[i];
+        if(e.id&&el.id===e.id)return e.surface;
+        var act=el.getAttribute&&(el.getAttribute('data-act')||el.getAttribute('data-b'));
+        if(e.selector&&act&&e.selector===('[data-act="'+act+'"]'))return e.surface;
+      }
+    }
+  }catch(e){}
+  return el&&el.closest&&el.closest('.cf-modal')?'dialog':(el&&el.closest&&el.closest('.cf-menu')?'menu':'canvas');
+}
+function cflogNow(){try{return Date.now();}catch(e){return 0;}}
+
+function cflogPush(entry){
+  if(CFLOG.queue.length>=200){CFLOG.dropped+=1;return;}
+  CFLOG.queue.push(entry);
+  if(CFLOG.queue.length>=20)cflogFlush();
+  else if(!CFLOG.timer)CFLOG.timer=setTimeout(cflogFlush,500);
+}
+
+/* 点击后 0–300ms 内出现 modal/menu/toast 算「有可观察效果」（简化 outcome）。 */
+function cflogOutcomeProbe(){
+  var before={modal:!$('cf-modal').hidden,menus:document.querySelectorAll('.cf-menu').length,toasts:document.querySelectorAll('.cf-toast').length};
+  return function(){
+    var after={modal:!$('cf-modal').hidden,menus:document.querySelectorAll('.cf-menu').length,toasts:document.querySelectorAll('.cf-toast').length};
+    var changed=before.modal!==after.modal||after.menus>before.menus||after.toasts>before.toasts;
+    return changed?'ok':'noop';
+  };
+}
+
+function cflogClick(e){
+  var t=e.target;
+  if(!t||!t.closest)return;
+  var el=t.closest('button,[role="button"],[data-act],[data-cf-log]');
+  if(!el)return;
+  if(el.getAttribute&&el.getAttribute('data-cf-nolog')==='1')return;
+  var control=cflogControlOf(el);
+  var now=cflogNow();
+  if(control===CFLOG.lastClick.key&&now-CFLOG.lastClick.at<300)return; // 双击去抖
+  CFLOG.lastClick={key:control,at:now};
+  var probe=cflogOutcomeProbe();
+  setTimeout(function(){
+    cflogPush({event:'ui.action',level:'info',data:{
+      control:control,surface:cflogSurfaceOf(el),outcome:probe(),
+      project:cflogProject(),view:CURVIEW,
+    }});
+  },0);
+}
+
+function cflogError(message,stack,extra){
+  cflogPush({event:'ui.error',level:'error',data:Object.assign({
+    control:null,message:String(message||'').slice(0,200),
+    stack:typeof stack==='string'?String(stack).slice(0,600):undefined,
+    project:cflogProject(),view:CURVIEW,
+  },extra||{})});
+  if(CFLOG.queue.length>=20)cflogFlush();
+}
+
+function cflogSerialize(){
+  var batches=[[]],size=0;
+  for(var i=0;i<CFLOG.queue.length;i++){
+    var text='';
+    try{text=JSON.stringify({events:[CFLOG.queue[i]]})||'';}catch(e){continue;}
+    if(size+text.length>48*1024&&batches[batches.length-1].length>0){batches.push([]);size=0;}
+    batches[batches.length-1].push(CFLOG.queue[i]);
+    size+=text.length;
+  }
+  return batches;
+}
+
+function cflogFlush(){
+  if(CFLOG.timer){clearTimeout(CFLOG.timer);CFLOG.timer=null;}
+  if(CFLOG.sending)return;
+  if(!CFLOG.queue.length)return;
+  var batches=cflogSerialize();
+  var first=batches.shift()||[];
+  var rest=CFLOG.queue.slice(first.length);
+  CFLOG.queue=rest;
+  CFLOG.sending=true;
+  var done=function(){CFLOG.sending=false;if(CFLOG.queue.length>=20)cflogFlush();};
+  fetchT('/codeflow/api/log',{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',keepalive:true,
+    body:JSON.stringify({events:first})})
+    .then(function(){done();})
+    .catch(function(){CFLOG.dropped+=first.length;done();}); // 失败静默：不重试、不 toast
+}
+
+function initLogExtras(){
+  /* 一个捕获阶段 click 监听（委托，不改任何既有控件）。 */
+  document.addEventListener('click',cflogClick,true);
+  window.addEventListener('error',function(e){
+    cflogError(e&&e.message,e&&e.error&&e.error.stack,{source:e&&e.filename?String(e.filename).slice(-80):undefined,line:e&&e.lineno});
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason;
+    cflogError((r&&(r.message||r))||'unhandled rejection',r&&r.stack,{source:'unhandledrejection'});
+  });
+  /* 页面卸载冲一次；失败不阻塞卸载。 */
+  window.addEventListener('pagehide',function(){
+    if(!CFLOG.queue.length)return;
+    var batches=cflogSerialize();
+    CFLOG.queue=[];
+    for(var i=0;i<batches.length;i++){
+      var body=JSON.stringify({events:batches[i]});
+      try{
+        if(navigator.sendBeacon&&navigator.sendBeacon('/codeflow/api/log',new Blob([body],{type:'application/json'})))continue;
+      }catch(e){}
+      try{fetch('/codeflow/api/log',{method:'POST',headers:{'content-type':'application/json'},keepalive:true,body:body}).catch(function(){});}catch(e){}
+    }
+  });
 }
 boot();
 initCanvasExtras();
 initCouplingExtras();
 initDropExtras();
+initLogExtras();
 })();
 </script>

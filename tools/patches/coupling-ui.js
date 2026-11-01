@@ -285,6 +285,12 @@ function initCouplingExtras(){
     if(btn)btn.hidden=true;
     return;
   }
+  /* v1.2.2：工具栏按钮的 click 绑定。此前 runCouplingAnalysis 只能从节点右键、
+     空白右键、耦合详情「重新分析」进入，工具栏按钮在 HTML 里是 disabled 且
+     从未绑过 click——永远点不动。只绑一次：initCouplingExtras 整个生命周期
+     只执行一次（IIFE 尾部的 boot 后挂钩），不存在重复绑定。 */
+  var cbtn=$('cf-tb-coupling');
+  if(cbtn)cbtn.addEventListener('click',function(){runCouplingAnalysis(null);});
   ensureCouplingCard();
   renderCouplingCard();
   applyCouplingMarks();

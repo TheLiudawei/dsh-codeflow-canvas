@@ -24,6 +24,7 @@
  *
  * Run: ELECTRON_RUN_AS_NODE=1 <electron> tests/regression.mjs
  */
+import './_log-off.mjs'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'

@@ -1,0 +1,4 @@
+{
+  "note": "仅限「平台相关/产品决定为非按钮」的例外条目。每条必须有 key/reason/owner/reviewedAt；条目被修复后审计会报 allowlisted-but-fixable 提醒删除。工具栏、空态、缩放、视图 tab、banner、对话框的关闭/取消/提交不允许进 allowlist。",
+  "entries": []
+}

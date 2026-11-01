@@ -32,8 +32,11 @@
 
 **正常情况下不会出现**：导入是纯确定性的目录扫描（`lib/duo.js` 一次调度 `lib/importer.js` 与 `lib/analyst.js`），
 面板点"导入项目"由宿主 `POST /codeflow/api/import` 直接完成并落盘**两张图**（`workflow.json` +
-`workflow.modules.json`，同一项目名），不惊动 agent。这个动作名只为兼容旧客户端与独立模式
-的手工构造请求保留；万一收到，按 `import-analysis.md` 扫描并推送即可，语义不变：
+`workflow.modules.json`，同一项目名），不惊动 agent。v1.2.1 起源码目录可以是磁盘上任意已存在目录
+（对话框里的「浏览…」只读目录树也可以），但图文件始终落在**当前工作区**的
+`<工作区>/CodeFlow/flow-projects/<项目名>/` 下——宿主在扫描前就解析并校验落点，解析不出直接报错。
+这个动作名只为兼容旧客户端与独立模式的手工构造请求保留；万一收到，按 `import-analysis.md`
+扫描并推送即可，语义不变：
 
 ```json
 {"action":"IMPORT","project":"legacy-app","rev":0,"graphPath":"/ws/CodeFlow/flow-projects/legacy-app/workflow.json","path":"C:/code/legacy-app","depth":4,"fromComments":true,"addTests":true}

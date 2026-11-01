@@ -16,13 +16,26 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const pluginRoot = fileURLToPath(new URL('..', import.meta.url))
 const { createRouter } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'routes.js')).href)
 const { createStore } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'store.js')).href)
+const { collectWorkspaces, validateWorkspaceChoice } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'workspace-binding.js')).href)
+const { browseDirectory } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'browse.js')).href)
 
 const workspace = await mkdtemp(path.join(tmpdir(), 'codeflow-e2e-'))
 const store = createStore(console)
+/** 最小宿主 ctx：只提供工作区注册表（v1.2.1 的 A1/A2 数据源）。 */
+const pluginCtx = {
+  get(name) {
+    if (name === 'workspaceRegistry') return { list: () => [{ id: 'ws-e2e', path: workspace, title: 'E2E' }] }
+    return undefined
+  },
+}
 const handler = createRouter({
   store,
   logger: console,
   resolveCwd: async () => workspace,
+  // v1.2.1：与 lib/index.js 同形的最薄装配（注册表唯一读方在 workspace-binding）。
+  listWorkspaces: (projectName) => collectWorkspaces({ ctx: pluginCtx, store, projectName }),
+  validateWorkspace: (raw) => validateWorkspaceChoice(pluginCtx, raw),
+  browseDirectory: (raw) => browseDirectory(raw),
   submit: async (g) => { submitCalls += 1; return { sessionId: 'sess-e2e', gesture: g } },
   ensureSession: async () => ({ sessionId: 'sess-e2e', created: false }),
 })
@@ -626,6 +639,86 @@ const dropSrcName = 'drop-folder'
 {
   assert.equal(submitCalls, 0, `the agent was woken ${submitCalls} time(s) by import/coupling/drop flows`)
   ok(`zero-LLM end to end: import/coupling/drop never delivered a gesture to any session`)
+}
+
+/* 26. v1.2.1：列工作区 → NEW（显式工作区）→ 重启式 boot → 浏览回填导入 */
+{
+  // 26a. 只读工作区清单：形状 + 调用前后目录不变。
+  const before = (await readdir(workspace)).slice().sort()
+  let r = await get('/codeflow/api/workspaces?project=e2e-new')
+  let j = await r.json()
+  assert.equal(r.status, 200, JSON.stringify(j))
+  assert.equal(j.ok, true)
+  assert.equal(j.workspaces.length, 1)
+  assert.equal(j.workspaces[0].path, workspace)
+  assert.equal(j.workspaces[0].exists, true)
+  assert.equal(j.current, workspace, 'the store binding defaults the dropdown')
+  assert.equal(
+    path.normalize(j.workspaces[0].projectDir),
+    path.normalize(path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-new')),
+    'preview is server-computed',
+  )
+  assert.deepEqual((await readdir(workspace)).slice().sort(), before, 'the listing is read-only')
+
+  // 26b. 缺 workspace → 400 且零副作用；未登记目录 → 409 且零副作用。
+  r = await post('/codeflow/api/action', { action: 'NEW', name: 'e2e-new', brief: 'x', language: 'python' })
+  j = await r.json()
+  assert.equal(r.status, 400)
+  assert.equal(j.code, 'WORKSPACE_REQUIRED')
+  const unregistered = path.join(workspace, 'unregistered-src')
+  await mkdir(unregistered, { recursive: true })
+  const beforeRefusal = (await readdir(workspace)).slice().sort()
+  r = await post('/codeflow/api/action', {
+    action: 'NEW', name: 'e2e-new', brief: 'x', language: 'python',
+    workspace: unregistered,
+  })
+  j = await r.json()
+  assert.equal(r.status, 409)
+  assert.equal(j.code, 'WORKSPACE_NOT_REGISTERED')
+  assert.deepEqual((await readdir(workspace)).slice().sort(), beforeRefusal, 'no side effects on refusal')
+
+  // 26c. NEW（带工作区）→ 项目目录落位、响应带落点三元组。
+  r = await post('/codeflow/api/action', {
+    action: 'NEW', name: 'e2e-new', brief: '做一个 e2e 项目', language: 'python', workspace,
+  })
+  j = await r.json()
+  assert.equal(r.status, 200, JSON.stringify(j))
+  assert.equal(j.ok, true)
+  assert.equal(j.project, 'e2e-new')
+  assert.equal(path.normalize(j.workspace), path.normalize(workspace))
+  assert.equal(path.normalize(j.projectDir), path.normalize(path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-new')))
+  const starterOnDisk = JSON.parse(await readFile(path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-new', 'workflow.json'), 'utf8'))
+  assert.equal(starterOnDisk.meta.starter, true, 'the starter graph is durable')
+  ok(`NEW with an explicit workspace → durable starter under the chosen workspace`)
+
+  // 26d. 重启式 boot：同一个项目仍从新落点加载，workspace/projectDir 一致。
+  r = await get(`/codeflow/canvas?boot=1&project=${encodeURIComponent('e2e-new')}`)
+  const bootHtml = await r.text()
+  assert.equal(r.status, 200)
+  const boot = JSON.parse(/window\.__CF_BOOT__=([\s\S]*?);<\/script>/.exec(bootHtml)[1])
+  assert.equal(boot.project, 'e2e-new')
+  assert.equal(path.normalize(boot.workspace), path.normalize(workspace))
+  assert.equal(path.normalize(boot.projectDir), path.normalize(path.join(workspace, 'CodeFlow', 'flow-projects', 'e2e-new')))
+  ok('restart-style boot reloads the project from the same workspace and dir')
+
+  // 26e. 浏览接口：选择器回填等价于直接传 path 的导入。
+  const source = path.join(workspace, 'picked-src')
+  await mkdir(path.join(source, 'lib'), { recursive: true })
+  await writeFile(path.join(source, 'lib', 'app.py'), '# TODO: e2e browse import\nprint("hi")\n', 'utf8')
+  r = await get(`/codeflow/api/browse?path=${encodeURIComponent(path.dirname(source))}`)
+  j = await r.json()
+  assert.equal(r.status, 200)
+  const picked = j.entries.find((entry) => entry.name === path.basename(source))
+  assert.ok(picked, 'the source dir appears in the browse listing')
+  r = await post('/codeflow/api/import', { path: picked.path, depth: 2, fromComments: true, addTests: false })
+  j = await r.json()
+  assert.equal(r.status, 200, JSON.stringify(j))
+  assert.equal(j.ok, true)
+  assert.equal(j.project, 'picked-src')
+  assert.equal(path.normalize(j.file), path.normalize(path.join(workspace, 'CodeFlow', 'flow-projects', 'picked-src', 'workflow.json')))
+  const leaked = await readdir(source)
+  assert.deepEqual(leaked.filter((name) => name === 'CodeFlow'), [], 'the source dir never receives CodeFlow files')
+  ok('browse fill-back import → graph lands under the workspace, source dir untouched')
 }
 
 await new Promise((resolve) => server.close(resolve))
