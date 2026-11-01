@@ -15,7 +15,7 @@
 
 | 文件 | 作用 | 谁来做 |
 | --- | --- | --- |
-| `mac-check.mjs` | 自动诊断：约 75 项主机侧检查，生成 `report.md` / `results.json` / `environment.json` | 终端一条命令 |
+| `mac-check.mjs` | 自动诊断：84 项主机侧检查，生成 `report.md` / `results.json` / `environment.json` | 终端一条命令 |
 | `MANUAL-CHECKLIST.md` | 手动清单：必须由人观察的 UI、键盘、手势、拖拽、运行行为 | 用户按步骤操作并记录 |
 | `console-probe.js` | 画布内探针：在 DevTools 里旁听焦点、按键、输入法、滚轮、右键、拖拽并导出 JSON | 有 DevTools 的用户 |
 
@@ -62,7 +62,7 @@ export DSH_EXECUTABLE="/Applications/你的应用.app/Contents/MacOS/你的应�
 
 ### 2. 跑手动清单
 
-打开 `MANUAL-CHECKLIST.md`。至少完成顶部的 **快速回归 17 项**；有条件再做完整版。每项用 `☐ 通过 / ☐ 失败 / ☐ 无法执行` 记录。
+打开 `MANUAL-CHECKLIST.md`。至少完成顶部的 **快速回归 18 项**；有条件再做完整版。每项用 `☐ 通过 / ☐ 失败 / ☐ 无法执行` 记录。
 
 ### 3. 采集画布内探针（怀疑假按键 / UI 不显示时必做）
 

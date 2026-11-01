@@ -15,6 +15,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /** 套件版本；报告里带上它，才能判断"这是哪一版测试"。 */
 export const SUITE_VERSION = '1.0.0'
@@ -23,9 +24,22 @@ export const SUITE_VERSION = '1.0.0'
 export function redact(value, home) {
   if (typeof value === 'string') {
     if (typeof home !== 'string' || home.length === 0) return value
+    // 堆栈里的 `file://` URL 会把中文路径百分号编码；只替换原始拼写会漏掉
+    // 用户名与主目录。这里把常见变体都收进来，并先替换最长的。
+    const variants = new Set([
+      home,
+      home.replace(/\\/g, '/'),
+      home.replace(/\//g, '\\'),
+    ])
+    try {
+      variants.add(encodeURI(home.replace(/\\/g, '/')))
+      variants.add(encodeURI(home))
+      variants.add(pathToFileURL(home).href)
+    } catch {
+      // 无法编码（孤立代理对等）：只保留原始拼写。
+    }
     let text = value
-    // 同时处理正斜杠与反斜杠拼写；Windows 的 home 也可能出现在 `file://` 里。
-    for (const variant of new Set([home, home.replace(/\\/g, '/'), home.replace(/\//g, '\\')])) {
+    for (const variant of [...variants].sort((left, right) => right.length - left.length)) {
       if (variant.length > 1) text = text.split(variant).join('~')
     }
     return text
@@ -94,7 +108,9 @@ function environmentRows(env) {
     push('启用输入法', `${active.join('、') || '仅键盘布局'}（${env.input.summary.enabledCount ?? '?'} 个输入源）`)
     push('当前键盘布局', env.input.currentLayout ?? '—')
   }
-  push('文件系统大小写', env.filesystem?.caseInsensitive ? '不敏感（APFS 默认）' : '敏感')
+  push('文件系统大小写', env.filesystem?.caseInsensitive
+    ? `不敏感${env.platform?.os === 'darwin' ? '（APFS 默认）' : ''}`
+    : '敏感')
   push('Unicode 规范化等价', env.filesystem?.unicodeNormalizationInsensitive ? '是（NFC/NFD 互相命中）' : '否')
   push('根分区', env.filesystem?.rootMount ?? '—')
   push('TMPDIR realpath 改写', env.filesystem?.tmpRealpathDiffers ? '是（/var → /private/var）' : '否')

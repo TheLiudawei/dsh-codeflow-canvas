@@ -145,9 +145,16 @@ async function runCoreSuites(ctx) {
         windowsHide: true,
       })
       const seconds = ((Date.now() - started) / 1000).toFixed(1)
-      const tail = `${String(result.stdout ?? '').trim()}\n${String(result.stderr ?? '').trim()}`.trim().split('\n').slice(-12).join('\n')
-      if (result.status !== 0) throw new Error(`退出码 ${result.status}（${seconds}s）\n${tail}`)
-      return `${seconds}s · ${tail.split('\n').filter(Boolean).slice(-1)[0] ?? '通过'}`
+      const tail = `${String(result.stdout ?? '').trim()}\n${String(result.stderr ?? '').trim()}`.trim()
+      if (result.status !== 0) {
+        throw new Error(`退出码 ${result.status}（${seconds}s）\n${tail.split('\n').slice(-12).join('\n')}`)
+      }
+      // 自检的输出里既有 `ok` 行也有 logger 警告；只取真正代表结论的一行。
+      const summaryLine = tail.split('\n').map((line) => line.trim()).filter(Boolean).reverse()
+        .find((line) => /\b\d+\s+checks?\s+passed\b/i.test(line)
+          || /^(RESULT:|PASS\b|FAILED$)/i.test(line)
+          || /全部通过|结论[:：]/.test(line))
+      return `${seconds}s · ${summaryLine ?? '退出码 0'}`
     })
   }
 }

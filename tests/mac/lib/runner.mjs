@@ -59,6 +59,8 @@ export function createRunner({ filter, quiet = false } = {}) {
   const groups = []
   const notes = []
   const counts = { ok: 0, fail: 0, warn: 0, skip: 0 }
+  /** 已经打印过标题的组：过滤运行时不留下空标题。 */
+  const printedGroups = new WeakSet()
   let current
   let startedAt = Date.now()
 
@@ -70,12 +72,19 @@ export function createRunner({ filter, quiet = false } = {}) {
 
   /**
    * 开一个检查组。组标题直接进报告，写成用户能看懂的中文。
+   * 标题延迟到第一条结果时打印——`--filter PATH` 时不会留下一串空组。
    */
   function group(title) {
     current = { title, entries: [] }
     groups.push(current)
-    if (!quiet) console.log(`\n${paint.bold('── ' + title + ' ──')}`)
     return current
+  }
+
+  /** 打印组标题（每个组一次）。 */
+  function printGroupHeader() {
+    if (printedGroups.has(current)) return
+    printedGroups.add(current)
+    if (!quiet) console.log(`\n${paint.bold('── ' + current.title + ' ──')}`)
   }
 
   /** 当前过滤是否放行某个 id。 */
@@ -86,6 +95,7 @@ export function createRunner({ filter, quiet = false } = {}) {
   /** 记录一条结果并打印。 */
   function record(entry) {
     ensureGroup()
+    printGroupHeader()
     current.entries.push(entry)
     if (entry.status in counts) counts[entry.status] += 1
     if (quiet && entry.status === 'ok') return entry
