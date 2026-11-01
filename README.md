@@ -466,34 +466,78 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
 
 ## Directory
 
+Refactored into strict layers (dependencies point one way only, top depends on bottom):
+
 ```
-lib/index.js        Plugin entry: registers skill/commands/tools; wires HTTP, sessions, activity, undo (per view)
-lib/client.js       Browser side: sidebar icon + main panel + "open session" navigation bridge
-lib/routes.js       /codeflow routes and JSON API (state/view/save/import/action/session/activity/undo/config
-                    + v1.2 coupling/drop)
-lib/paths.js        v1.0: the single place that assembles project paths (default <ws>/CodeFlow root,
-                    global custom root + per-project override, config.json, one-time legacy migration)
-lib/coupling.js     v1.2: coupling engine — symbol cross-reference graph, module dependency graph,
-                    SCC/closure/depth, scoring and the overall verdict, staleness probe (pure
-                    functions + a runCoupling orchestrator; every constant exported for tests)
-lib/archive.js      v1.2: pure-Node zip/tar/tar.gz extraction, 7z/rar external-tool probing with
-                    fallback, path safety (zip-slip/symlinks/caps), GBK names, single-root stripping
-lib/drop-import.js  v1.2: drop-import staging (begin/file/finalize/abort, caps, 6h sweep),
-                    conflict/overwrite/rename, calls the dual import
-lib/duo.js          Dual-import orchestration: one scan produces both pipeline and module graph (shared project name)
-lib/sessions.js     Canvas dedicated-session manager: ensure/rebind/sidecar/error recovery/delivery
-lib/activity.js     Activity Hub: event subscription, node mapping, ring buffer, progress, file-edit table (memory only)
-lib/undo.js         Run snapshot/restore (view-aware manifests), manifest/index, LIFO, backup, quota cleanup, path validation
-lib/store.js        Dual-view graph state (independent rev per view), artifacts/presented sanitizing, patchNode, project list
-lib/tool.js         codeflow_canvas tool (render/read/save/progress/load, all view-aware)
-lib/importer.js     Deterministic project import (task pipeline): scan/language detection/comment parsing/graph build (also a CLI)
-lib/analyst.js      Code structure analysis (module graph): symbols/imports/role inference/module node graph
-lib/workspace.js    Path sanitizing (@, ~, quotes, file://, macOS case/normalization) and session working-directory repair
-lib/starter.js      Deterministic skeleton graph for "new project" (works even without an available session)
-lib/commands.js     /flow, /flow-new (agent-executed); /flow-import (host-executed, dual generation)
-lib/skill.js        Skill provider (inline rank=600, avoiding cross-package dependency)
-lib/message.js      Equivalent implementation of createUserMessage (also avoids cross-package dependency)
-lib/canvas-page.js  Wraps the canvas fragment into a full document and injects boot data
+── Layer 0 · lib/core/          foundation utilities (import node:* only)
+  core/fsio.js        atomic write (temp→fsync→rename), tolerant JSON reads,
+                      bounded line reads — the single implementations
+  core/path.js        project naming contract (safeProjectName/projectKeyOf/
+                      projectDirOf/freeName), path helpers (containment, rel,
+                      stem), directory constants (CodeFlow / flow-projects)
+  core/text.js        clip / firstSentence / errorMessage / warn-once factory
+
+── Layer 1 · lib/scan/          deterministic source scanning (imports core only)
+  scan/walk.js        skip lists, language table (LANG_EXTS/EXT_LANG), bounded
+                      walk, looksLikeTest, languageStats
+  scan/comments.js    per-family comment grammars, task markers (TODO/FIXME…)
+  scan/symbols.js     top-level symbol extraction, import specifiers, import
+                      resolution (shared by analyst / features / coupling)
+
+── Layer 2 · graph format, config, migration, features
+  lib/graph-format.js  `codeflow/1` envelope constants + pure normalizers
+                       (normalizeGraph/artifacts/presented/coupling, view keys)
+  lib/codeflow-config.js  CodeFlow config.json shape, tolerant IO, settings
+                          validation (the config layer)
+  lib/migration.js     one-time legacy project migration (idempotent, never
+                       loses data) + project-directory recognition
+  lib/features/        feature-index subpackage: constants / dictionary /
+                       index-file / detect / apply / map / ops
+  lib/features.js      the package's aggregate entry (all public symbols
+                       re-exported; historical import path preserved)
+
+── Layer 3 · deterministic import & analysis
+  lib/importer.js     task-pipeline generation + CLI (scan layer imported)
+  lib/analyst.js      module-graph generation (role inference + assembly)
+  lib/duo.js          dual import orchestration + persistDualResult (the shared
+                      landing sequence for HTTP import / drop / /flow-import)
+  lib/coupling.js     v1.2 coupling engine (inter/intra metrics, SCC, scoring,
+                      staleness probe)
+
+── Layer 4 · host state & execution
+  lib/store.js        the single graph writer: dual-view rev holder, persistence
+                      pipeline, corruption quarantine, project list
+  lib/sessions.js     canvas dedicated-session manager (binding/sidecar/delivery)
+  lib/undo.js         run snapshot/restore (LIFO, view-aware manifests)
+  lib/activity.js     Activity Hub: event subscription, reasoning/tool/step
+                      buffer, progress, file-edit tracking (memory only)
+  lib/tool.js         codeflow_canvas tool (render/load/read/save/progress)
+  lib/features-tool.js  codeflow_features tool
+  lib/commands.js     /flow, /flow-new (agent-executed); /flow-import (host-side)
+  lib/workspace.js    path sanitizing (@, ~, quotes, file://) and session
+                      working-directory repair
+  lib/archive.js      v1.2 pure-Node zip/tar extraction, 7z/rar external tools
+  lib/drop-import.js  v1.2 drop-import staging (begin/file/finalize/abort)
+  lib/starter.js      deterministic skeleton graph for 新建项目
+  lib/gestures.js     the [CodeFlow:*] protocol: gesture → prompt delivery,
+                      run requirements, optimistic running, topo order
+
+── Layer 5 · HTTP & entry
+  lib/routes.js       createRouter: context assembly + table dispatch + error
+                      boundary (the 13-dep signature is unchanged)
+  lib/http/           route groups: respond (transport primitives) / context
+                      (shared helpers) / canvas / state / import / features /
+                      project
+  lib/index.js        plugin entry: pure assembly (skill/commands/tools/HTTP/
+                      sessions/activity/undo wiring + end-of-turn reconciliation)
+  lib/skill.js        skill provider (inline rank, no cross-package dependency)
+  lib/message.js      createUserMessage/textContent shims
+  lib/canvas-page.js  wraps the canvas fragment into a full document + boot data
+  lib/client.js       browser side: sidebar icon + main panel (out of refactor scope)
+  lib/paths.js        resolution facade: effective root / project dir / layout /
+                      project list (config & migration live in their own layers,
+                      re-exported here for compatibility)
+
 assets/canvas/canvas.html      The canvas itself (generated by tools/port-canvas.mjs — do not hand-edit)
 assets/skill/codeflow-canvas/  Skill docs + four references
 tools/port-canvas.mjs          Reproducible port script (asserts every change point)
@@ -504,8 +548,17 @@ tests/validate.mjs             Structure + behavior self-check (sessions/activit
 tests/regression.mjs           Per-fix regressions for v0.5.2 (B2–B9)
 tests/e2e.mjs                  Real http server + real fetch scenarios (dual import/switching/restart/old projects/corruption quarantine)
 tests/undo.mjs                 Undo snapshot/restore/LIFO/cross-view
+tests/coupling.mjs             v1.2 coupling engine + persistence
+tests/drop-import.mjs          v1.2 extraction/staging/caps/conflicts
+tests/features.mjs             v1.1 feature index
 tests/contrast.mjs             WCAG AA contrast audit for the light palette (called by the self-check)
 ```
+
+The refactor is behavior-preserving: every historical module path still exports
+its original symbols (moved code is re-exported), all HTTP routes / tool
+schemas / file formats / the `[CodeFlow:*]` protocol are unchanged, and all
+285+ self-checks pass without a single test modification.
+
 
 ## Development
 

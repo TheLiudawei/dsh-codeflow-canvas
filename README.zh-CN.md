@@ -359,49 +359,91 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 
 ## 目录
 
+重构为严格分层（依赖单向向下，上层依赖下层）：
+
 ```
-lib/index.js        插件入口：注册技能/命令/工具，串起 HTTP、会话、活动与撤销（按视图）
-lib/client.js       浏览器半侧：侧边栏图标 + main 面板 + "打开会话"导航桥
-lib/routes.js       /codeflow 路由与 JSON API（state/view/save/import/action/session/activity/undo/config
-                    + v1.2 coupling/drop）
-lib/paths.js        v1.0：项目路径的唯一拼装点（默认根 <工作区>/CodeFlow、全局自定义根 +
-                    单项目覆盖、config.json、一次性旧目录迁移）
-lib/coupling.js     v1.2：耦合分析引擎——符号互引图、模块依赖图、SCC/闭包/深度、评分与
-                    整体"屎山程度"、过期判定（纯函数 + runCoupling 编排，全部常量可导出测试）
-lib/archive.js      v1.2：zip/tar/tar.gz 纯 Node 解压、7z/rar 外部工具探测与降级、路径安全
-                    （zip-slip/符号链接/限额）、GBK 文件名、去壳
-lib/drop-import.js  v1.2：拖拽导入暂存区（begin/file/finalize/abort、限额、6h 清扫）、
-                    冲突/覆盖/改名、调用双图导入
-lib/duo.js          双导入编排：一次扫描同时生成任务流水线与模块结构图（共用项目名）
-lib/sessions.js     画布专用会话管理器：ensure/rebind/sidecar/错误恢复/投递
-lib/activity.js     Activity Hub：事件订阅、节点映射、环形缓冲、进度、文件编辑表（纯内存）
-lib/undo.js         运行快照/恢复（manifest 带 view）、manifest/index、LIFO、备份、配额清理、路径校验
-lib/store.js        双视图图状态（每视图独立 rev）、artifacts/presented 清洗、patchNode、项目列表
-lib/tool.js         codeflow_canvas 工具（render/read/save/progress/load，均支持 view）
-lib/importer.js     确定性项目导入（任务流水线）：扫描/语言识别/注释解析/生成图（也是独立 CLI）
-lib/analyst.js      代码块结构分析（模块结构图）：符号/导入解析/角色推断/module 节点图
-lib/workspace.js    路径清洗（@、~、引号、file://、macOS 大小写/规范化）与会话工作目录修复
-lib/starter.js      「新建项目」的确定性骨架图（无可用会话时也能创建项目）
-lib/commands.js     /flow、/flow-new（agent 执行）；/flow-import（宿主直接执行，双生成）
-lib/skill.js        技能 provider（内联 rank=600，免去跨包依赖）
-lib/message.js      createUserMessage 的等价实现（同样避免跨包依赖）
-lib/canvas-page.js  把画布片段包成完整文档并注入启动数据
-assets/canvas/canvas.html      画布本体（由 tools/port-canvas.mjs 生成，勿手改）
-assets/skill/codeflow-canvas/  技能文档 + 四份 references
-tools/port-canvas.mjs          可复现的迁移脚本（逐条断言每个改动点）
-tools/patches/                 features（v1.1）与 coupling/drop（v1.2）的画布行为与样式补丁
-tools/theme-light.css          浅色主题覆盖层（生成时追加进画布样式表）
+── 第 0 层 · lib/core/          基础工具（只 import node:*）
+  core/fsio.js        原子写（临时文件→fsync→rename）、宽容 JSON 读取、
+                      有界按行读取——都是唯一实现
+  core/path.js        项目命名契约（safeProjectName/projectKeyOf/projectDirOf/
+                      freeName）与路径助手（包含判断、rel、词干）、目录常量
+                      （CodeFlow / flow-projects）
+  core/text.js        clip / firstSentence / errorMessage / 只警告一次工厂
+
+── 第 1 层 · lib/scan/          确定性源码扫描（只依赖 core）
+  scan/walk.js        跳过清单、语言表（LANG_EXTS/EXT_LANG）、有遍历预算的
+                      walk、looksLikeTest、languageStats
+  scan/comments.js    各家族注释文法、任务标记（TODO/FIXME…）
+  scan/symbols.js     顶层符号提取、import 指示符与解析（analyst / features /
+                      coupling 共用）
+
+── 第 2 层 · 图格式、配置、迁移、功能索引
+  lib/graph-format.js  `codeflow/1` 信封常量 + 纯函数清洗
+                       （normalizeGraph/artifacts/presented/coupling、视图键）
+  lib/codeflow-config.js  CodeFlow config.json 形状、宽容 IO、设置校验（配置层）
+  lib/migration.js     旧项目一次性迁移（幂等、绝不丢数据）+ 项目目录识别
+  lib/features/        功能索引子包：constants / dictionary / index-file /
+                       detect / apply / map / ops
+  lib/features.js      子包聚合入口（全量 re-export；历史导入路径不变）
+
+── 第 3 层 · 确定性导入与分析
+  lib/importer.js     任务流水线生成 + CLI（扫描层改为导入）
+  lib/analyst.js      模块结构图生成（角色推断 + 装配）
+  lib/duo.js          双图导入编排 + persistDualResult（HTTP 导入/拖拽/
+                       /flow-import 共用的落地序列）
+  lib/coupling.js     v1.2 耦合引擎（inter/intra 度量、SCC、评分、过期探测）
+
+── 第 4 层 · 宿主状态与执行
+  lib/store.js        图的唯一写者：双视图 rev 持有、持久化管线、损坏隔离、
+                      项目列表
+  lib/sessions.js     画布专用会话管理器（绑定/侧车/投递）
+  lib/undo.js         运行快照/恢复（LIFO、视图感知 manifest）
+  lib/activity.js     活动中心：事件订阅、推理/工具/步骤缓冲、进度、文件编辑
+                      追踪（纯内存）
+  lib/tool.js         codeflow_canvas 工具（render/load/read/save/progress）
+  lib/features-tool.js  codeflow_features 工具
+  lib/commands.js     /flow、/flow-new（agent 执行）；/flow-import（宿主侧）
+  lib/workspace.js    路径清洗（@、~、引号、file://）与会话工作目录修复
+  lib/archive.js      v1.2 纯 Node zip/tar 解压、7z/rar 外部工具
+  lib/drop-import.js  v1.2 拖拽导入暂存（begin/file/finalize/abort）
+  lib/starter.js      「新建项目」的确定性骨架图
+  lib/gestures.js     [CodeFlow:*] 协议：手势 → 提示词投递、执行要求脚注、
+                      乐观置 running、拓扑序
+
+── 第 5 层 · HTTP 与入口
+  lib/routes.js       createRouter：上下文装配 + 表分发 + 统一错误边界
+                      （13 参签名不变）
+  lib/http/           路由组：respond（传输基元）/ context（共享助手）/
+                      canvas / state / import / features / project
+  lib/index.js        插件入口：纯装配（技能/命令/工具/HTTP/会话/活动/撤销
+                      接线 + 回合结束对账）
+  lib/skill.js        技能提供者（内联 rank，不跨包依赖）
+  lib/message.js      createUserMessage/textContent 等价实现
+  lib/canvas-page.js  把画布片段包成完整文档并注入 boot 数据
+  lib/client.js       浏览器半边：侧边栏图标 + 主面板（本次重构不动）
+  lib/paths.js        解析门面：生效根 / 项目目录 / 目录骨架 / 项目列表
+                      （配置与迁移在各自层，这里兼容 re-export）
+
+assets/canvas/canvas.html      画布本体（tools/port-canvas.mjs 的生成物——不要手改）
+assets/skill/codeflow-canvas/  技能文档 + 四份参考
+tools/port-canvas.mjs          可复现的移植脚本（断言每一处改动点）
+tools/theme-light.css          浅色主题覆盖（生成时追加进画布样式表）
 tools/upstream/                上游 v0.2.2 画布片段原件
-tools/verify-client-bundle.mjs 客户端 bundle 的 10 项加载契约校验
+tools/verify-client-bundle.mjs 客户端 bundle 的 10 项加载契约检查
 tests/validate.mjs             结构 + 行为自检（会话/活动/进度/撤销/双视图/编辑追踪/画布资产/XSS）
-tests/regression.mjs           v0.5.2 修复逐项回归（B2–B9）
-tests/e2e.mjs                  真 http server + 真 fetch 场景（含双导入/切换/重启/旧项目/损坏隔离
-                               + v1.2 耦合与拖拽导入）
+tests/regression.mjs           v0.5.2 各修复的回归（B2–B9）
+tests/e2e.mjs                  真 http 服务 + 真 fetch 场景（双导入/切换/重启/旧项目/损坏隔离）
 tests/undo.mjs                 撤销快照/恢复/LIFO/跨视图
-tests/coupling.mjs             v1.2 耦合引擎：评分/阈值/确定性/SCC/闭包/部分结果/清洗/过期
-tests/drop-import.mjs          v1.2 解压与暂存：zip/tar 夹具、zip-slip、GBK、限额、冲突、无 LLM 断言
-tests/contrast.mjs             浅色调色板的 WCAG AA 对比度审计（被自检调用）
+tests/coupling.mjs             v1.2 耦合引擎与持久化
+tests/drop-import.mjs          v1.2 解压/暂存/限额/冲突
+tests/features.mjs             v1.1 功能索引
+tests/contrast.mjs             浅色调色板的 WCAG AA 对比度审计（自检调用）
 ```
+
+本次重构保持行为不变：每个历史模块路径仍导出原有符号（迁走的代码以
+re-export 留守），HTTP 路由、工具 schema、文件格式与 `[CodeFlow:*]` 协议
+全部原样，285+ 项自检零测试改动通过。
+
 
 ## 开发
 

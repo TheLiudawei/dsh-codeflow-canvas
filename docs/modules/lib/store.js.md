@@ -26,10 +26,11 @@ CodeFlow 画布的唯一写者：内存里保存每个项目两个视图（tasks
 - 加载：`load()` / `loadView()`（均接受显式 `dir`；从磁盘恢复，损坏文件被 `quarantineCorrupt` 改名为 `*.bad-<时间戳>` 并记录 `degraded`，而不是静默覆盖）
 - 绑定：`bindCwd(project, cwd, dir?)` / `bindDir()`、`bindSession()` / `bindSessionInfo()` / `forgetSession()`、`setActiveView()`
 
-## 依赖关系
+## 依赖关系（重构后）
 
-- **导入**（v1.0）：`lib/paths.js`（`DEFAULT_DIR_NAME`、`listProjectDirs`；paths.js 又复用本模块的 `atomicWriteFile`/`projectDirOf`——仅在函数体内互访的安全 ESM 环）、`node:fs/promises`、`node:crypto`、`node:path`。
-- **被依赖**（10 个模块 + 测试）：`lib/index.js`、`lib/routes.js`、`lib/tool.js`、`lib/undo.js`、`lib/sessions.js`、`lib/importer.js`、`lib/duo.js`、`lib/starter.js`、`lib/activity.js`、`lib/analyst.js`，以及 `tests/undo.mjs`。
+- **导入**：`lib/core/fsio.js`（atomicWriteFile）、`lib/core/path.js`（projectKeyOf/projectDirPath/UNTITLED_KEY）、`lib/graph-format.js`（normalize* 与视图常量）、`lib/paths.js`（仅 `listProjectDirs`，项目列表扫描用）、`node:fs/promises`、`node:crypto`、`node:path`。历史的 `store ⇄ paths` ESM 循环已斩断（命名/IO/格式下沉后 paths 不再回头 import store）。
+- **被依赖**：仅 `lib/index.js`（装配时创建 store）+ 测试（tests/undo、regression、e2e、coupling、validate 经 store.js 或其 re-export 取符号）。routes/tool/sessions/undo/activity 等已改为直接依赖 `lib/graph-format.js` 与 `lib/core/*`，运行时经注入持有 store。
+- **兼容面**：本模块仍 re-export 图格式（normalizeGraph/normalizeView/VIEW_* 等）、命名（safeProjectName/projectKeyOf/projectDirOf/projectDirPath）与 atomicWriteFile——tests 与历史调用方继续从这里导入即可。
 
 ## 设计要点
 
