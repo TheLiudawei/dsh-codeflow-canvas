@@ -29,7 +29,7 @@
 
 - macOS 12 或更新；
 - 已安装 DSH 桌面版，且已安装 CodeFlow Canvas 插件（设置 → 插件里能看到 `dsh-codeflow-canvas`）；
-- 把整个插件仓库目录（含 `tests/mac/`）放在本机；如果只拿到了测试套件，运行时用 `--plugin` 指向已安装的插件目录。
+- 把整个插件仓库目录（含 `tests/mac/`）放在本机；如果只拿到了测试套件压缩包，解压到任意目录即可——启动器会自动在 `~/Library/Application Support` 等常见位置查找已安装的插件，找不到时按提示用 `--plugin "<插件目录>"` 或环境变量 `PLUGIN_DIR` 指定。
 
 ### 1. 跑自动诊断
 
@@ -189,6 +189,18 @@ xattr -dr com.apple.quarantine tests/mac/run-mac-check.command
 ```
 
 再双击；或在终端 `bash tests/mac/run-mac-check.command`。
+
+**提示"这不是 CodeFlow Canvas 插件目录" / 找不到插件**
+
+说明测试包不在插件仓库里，且自动发现没有命中。用设置 → 插件里显示的安装位置显式指定：
+
+```bash
+./run-mac-check.command --plugin "/路径/到/dsh-codeflow-canvas"
+# 或
+PLUGIN_DIR="/路径/到/dsh-codeflow-canvas" ./run-mac-check.command
+```
+
+该目录下应有 `package.json`（`"name": "dsh-codeflow-canvas"`）与 `lib/index.js`。
 
 **报告里所有项都跳过**
 

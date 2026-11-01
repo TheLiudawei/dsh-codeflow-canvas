@@ -82,6 +82,86 @@ if [ "$HAS_OUT" -eq 0 ]; then
   ARGS+=(--out "$OUT")
 fi
 
+# 4) 插件目录：--plugin > PLUGIN_DIR > 同仓库布局 > 已安装副本自动发现
+HAS_PLUGIN=0
+PREV=""
+for arg in "$@"; do
+  if [ "$arg" = "--plugin" ]; then
+    HAS_PLUGIN=1
+  fi
+  if [ "$PREV" = "--plugin" ] && [ -n "$arg" ]; then
+    HAS_PLUGIN=1
+  fi
+  PREV="$arg"
+done
+
+PLUGIN_RESOLVED=""
+if [ "$HAS_PLUGIN" -eq 1 ]; then
+  : # 用户显式指定，原样交给 mac-check.mjs
+elif [ -n "${PLUGIN_DIR:-}" ] && [ -f "$PLUGIN_DIR/package.json" ]; then
+  PLUGIN_RESOLVED="$PLUGIN_DIR"
+elif [ -f "$DIR/../../package.json" ] \
+  && grep -q '"name"[[:space:]]*:[[:space:]]*"dsh-codeflow-canvas"' "$DIR/../../package.json" 2>/dev/null; then
+  : # 测试包就在插件仓库的 tests/mac/ 下，默认根正确
+else
+  # 独立压缩包：在 DSH 常见安装位置找已安装的插件目录。
+  SEARCH_ROOTS=(
+    "$HOME/Library/Application Support/DeepSeek Harness"
+    "$HOME/Library/Application Support/DSH"
+    "$HOME/Library/Application Support/deepseek-harness"
+    "$HOME/.deepseek-harness"
+    "$HOME/.dsh"
+  )
+  CANDIDATES=()
+  for root in "${SEARCH_ROOTS[@]}"; do
+    [ -d "$root" ] || continue
+    while IFS= read -r cand; do
+      [ -n "$cand" ] || continue
+      if [ -f "$cand/package.json" ] \
+        && grep -q '"name"[[:space:]]*:[[:space:]]*"dsh-codeflow-canvas"' "$cand/package.json" 2>/dev/null; then
+        CANDIDATES+=("$cand")
+      fi
+    done < <(find "$root" -maxdepth 8 -type d -name "dsh-codeflow-canvas" 2>/dev/null)
+  done
+
+  UNIQUE=()
+  if [ "${#CANDIDATES[@]}" -gt 0 ]; then
+    for cand in "${CANDIDATES[@]}"; do
+      duplicate=0
+      if [ "${#UNIQUE[@]}" -gt 0 ]; then
+        for seen in "${UNIQUE[@]}"; do
+          if [ "$seen" = "$cand" ]; then duplicate=1; break; fi
+        done
+      fi
+      if [ "$duplicate" -eq 0 ]; then UNIQUE+=("$cand"); fi
+    done
+  fi
+
+  if [ "${#UNIQUE[@]}" -eq 1 ]; then
+    PLUGIN_RESOLVED="${UNIQUE[0]}"
+  elif [ "${#UNIQUE[@]}" -gt 1 ]; then
+    echo "找到多个已安装的 CodeFlow 插件目录，请用 --plugin 指定其中一个："
+    printf '  %s\n' "${UNIQUE[@]}"
+    pause_if_interactive
+    exit 2
+  else
+    echo "错误：当前目录不是插件仓库，也没有自动找到已安装的 CodeFlow 插件。"
+    echo
+    echo "请用 --plugin 指向插件目录（DSH 设置 → 插件里可以看到安装位置）："
+    echo "  \"$0\" --plugin \"/路径/到/dsh-codeflow-canvas\""
+    echo "或设置环境变量："
+    echo "  export PLUGIN_DIR=\"/路径/到/dsh-codeflow-canvas\""
+    pause_if_interactive
+    exit 2
+  fi
+fi
+
+if [ -n "$PLUGIN_RESOLVED" ]; then
+  echo "插件目录: $PLUGIN_RESOLVED"
+  ARGS+=(--plugin "$PLUGIN_RESOLVED")
+fi
+
+
 echo "CodeFlow Canvas · macOS 诊断套件"
 echo "套件目录: $DIR"
 echo "报告目录: ${OUT:-（由 mac-check.mjs 决定）}"

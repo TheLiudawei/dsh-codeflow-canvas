@@ -172,6 +172,29 @@ async function main() {
     process.exit(2)
   }
 
+  // 独立压缩包解压后默认根往往不是插件目录；给出可行动的下一步，而不是让
+  // 后面的检查以奇怪的 import 错误收场。
+  const pkgFile = path.join(pluginRoot, 'package.json')
+  const pkgStat = await stat(pkgFile).catch(() => undefined)
+  if (pkgStat === undefined) {
+    console.error(`这不是 CodeFlow Canvas 插件目录：${pluginRoot}`)
+    console.error('缺少 package.json。请用 --plugin 指向已安装的插件目录，例如：')
+    console.error(`  ${process.argv[0]} ${process.argv[1]} --plugin "/Applications/…/dsh-codeflow-canvas"`)
+    process.exit(2)
+  }
+  let pkgName
+  try {
+    pkgName = JSON.parse(await readFile(pkgFile, 'utf8')).name
+  } catch (error) {
+    console.error(`package.json 无法解析：${String(error?.message ?? error)}`)
+    process.exit(2)
+  }
+  if (pkgName !== 'dsh-codeflow-canvas') {
+    console.error(`package.json 的 name 是 ${JSON.stringify(pkgName)}，不是 "dsh-codeflow-canvas"。`)
+    console.error('请用 --plugin 指向正确的插件目录。')
+    process.exit(2)
+  }
+
   const outDir = options.out ?? await defaultOutDir()
   const workRoot = await mkdtemp(path.join(tmpdir(), 'codeflow-mac-work-'))
   const runner = createRunner({ filter: options.filter, quiet: options.quiet })
