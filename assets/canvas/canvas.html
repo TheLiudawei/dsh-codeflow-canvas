@@ -3867,7 +3867,12 @@ function runCouplingAnalysis(nodeId){
       COUPLING.running=false;
       updateCouplingButton();
       refreshLatestSoon(true);
-      fetchCouplingStale(true);
+      /* v1.2.2 修复：这里此前调用了一个不存在的函数名（真实函数是下面的
+         refreshCouplingStale——把前缀误写成了 fetch），分析成功后的刷新链
+         在 ReferenceError 上断掉，用户看到「耦合分析失败：… is not defined」。
+         宿主侧其实已写图成功，只有客户端刷新断了。tests/buttons.mjs 的
+         undefined-symbol 检查会拦住这类拼写错误。 */
+      refreshCouplingStale(true);
       renderCouplingCard();
       if(res&&res.warning)toast(res.warning,'err');
       if(res&&res.overall)toast('耦合分析完成：屎山程度 '+couplingLevelText(res.overall.level)+'（'+((res.durationMs==null)?'<1':res.durationMs)+'ms）','ok');

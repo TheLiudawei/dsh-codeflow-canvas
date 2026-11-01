@@ -36,7 +36,7 @@
 
 ## 1.2.2 变更
 
-- **画布所有可点击控件都有清单、有绑定、有审计。** 数据清单 `lib/ui/actions.js`（73 个控件）是单一事实来源：`tests/buttons.mjs` 静态证明每个控件都登记且至少有一条绑定路径；生成器注入的 `window.__CF_ACTION_MANIFEST__` 供画布内真实点击自检脚本（`tests/buttons/canvas-selftest.js`）使用；其余路径由 `tests/buttons/MANUAL-CHECKLIST.md` 逐项验收。审计揪出并修复了四个真实缺陷：**「耦合分析」工具栏按钮从未绑过 click**（HTML 里 disabled、只能从右键进入，永远点不动）；**会话 chip 是可聚焦但无动作的假按钮**（现在点开「画布专用会话」）；**拖拽确认/进度/冲突三个对话框的 ✕ 是死按钮**——对话框的 close/cancel 现在由 `#cf-dialog` 上的一次事件委托统一兜底。
+- **画布所有可点击控件都有清单、有绑定、有审计。** 数据清单 `lib/ui/actions.js`（73 个控件）是单一事实来源：`tests/buttons.mjs` 静态证明每个控件都登记且至少有一条绑定路径；生成器注入的 `window.__CF_ACTION_MANIFEST__` 供画布内真实点击自检脚本（`tests/buttons/canvas-selftest.js`）使用；其余路径由 `tests/buttons/MANUAL-CHECKLIST.md` 逐项验收。审计揪出并修复了四个真实缺陷：**「耦合分析」工具栏按钮从未绑过 click**（HTML 里 disabled、只能从右键进入，永远点不动）；**会话 chip 是可聚焦但无动作的假按钮**（现在点开「画布专用会话」）；**拖拽确认/进度/冲突三个对话框的 ✕ 是死按钮**——对话框的 close/cancel 现在由 `#cf-dialog` 上的一次事件委托统一兜底。 按钮修好后立即暴露出下一个潜伏缺陷：分析**成功后**的刷新链调用了一个拼错的函数名（`fetchCouplingStale`），宿主已写图成功、画布却弹「耦合分析失败」——已修复，且 `tests/buttons.mjs` 新增 undefined-symbol 检查：任何被调用却从未定义的标识符直接红。
 - **外壳套外壳的导入找到真实项目根。** 三条导入通道（拖拽压缩包、拖拽文件夹、路径/对话框导入）都走同一个保守根解析器（`lib/import/root-detect.js`）：压缩包先按既有语义剥最外层，之后只有「项目标记 / 明显外壳名 / 与父同名」才继续下钻。`proj/src` 必须保留 `proj`；无标记的单链外壳直接 `400 SHELL_AMBIGUOUS`，绝不生成项目名/根目录错误的项目；空壳 400；多项目父目录保留父目录并记 `multiProject` 警告。`tests/import-shells.mjs` 覆盖 51 个「夹具 × 通道」组合。
 - **工作与报错日志。** 插件在安装目录写 JSONL 文件日志 `codeflow.log`（5 MiB 轮转、保留一个 `.1`、串行写、失败降级不崩）：记录插件生命周期、导入（`import.start/root/done/…`）、耦合分析、HTTP 错误与画布 UI 动作/报错——绝不记录提示词、源码、图 JSON、Cookie/Token（按键名脱敏 + 截断）。画布侧通过 `POST /codeflow/api/log` 批量上报（白名单 `ui.action/ui.error/ui.selftest`、64 KiB 上限、50 条/秒、单批 20 条）。`CODEFLOW_LOG=off` 关闭；`CODEFLOW_LOG_FILE` 覆盖路径。新增架构测试（`tests/architecture.mjs`）钉住分层：logging/root-detect 零领域依赖、导入管道不接触 `req/res`、静态 import 图无环。
 

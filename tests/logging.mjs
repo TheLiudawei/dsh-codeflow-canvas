@@ -39,6 +39,11 @@ const tmp = await mkdtemp(path.join(tmpdir(), 'codeflow-logging-'))
    在 §8 用例里显式验证；apply 接线段各自管理 env）。 */
 process.env.CODEFLOW_LOG = ''
 
+/* 基线：插件根是否已存在 codeflow.log。插件以 Junction 安装在仓库根，
+   **正在运行的 DSH 会真实地写它**（生产语义）；测试只保证「本进程没写」。 */
+const rootLogPath = path.join(pluginRoot, 'codeflow.log')
+const rootLogExistedBefore = await stat(rootLogPath).then(() => true, () => false)
+
 /** 读 JSONL 文件为行对象数组（空行忽略）。 */
 async function readJsonl(file) {
   const text = await readFile(file, 'utf8').catch(() => '')
@@ -360,10 +365,17 @@ console.log('\n[http e2e]')
 
 /* ------------------------------------------------- 11. 仓库根无日志 ------ */
 {
-  const rootLog = path.join(pluginRoot, 'codeflow.log')
-  const probe = await stat(rootLog).then((i) => i.isFile(), () => false)
-  assert.equal(probe, false, '测试全程不得在插件根生成 codeflow.log')
-  ok('仓库根没有新增 codeflow.log（测试默认关闭）')
+  const probe = await stat(rootLogPath).then((i) => i.isFile(), () => false)
+  if (!probe) {
+    ok('仓库根没有 codeflow.log（测试默认关闭；DSH 未在运行）')
+  } else {
+    // 插件以 Junction 安装在仓库根：正在运行的 DSH 会写生产日志——那是特性，
+    // 不是污染。断言收紧为「本测试进程没有写过它」（按 pid 判定）。
+    const text = await readFile(rootLogPath, 'utf8').catch(() => '')
+    const writtenByThisProcess = new RegExp(`"pid":${process.pid}\\b`).test(text)
+    assert.equal(writtenByThisProcess, false, '本测试进程不得写仓库根 codeflow.log')
+    ok('仓库根 codeflow.log 为运行中的 DSH 插件所写（本测试进程零写入）')
+  }
 }
 
 async function mkdir2(dir) {

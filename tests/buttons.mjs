@@ -335,6 +335,45 @@ for (const entry of CANVAS_ACTIONS) {
 }
 if (!findings.some((f) => f.category === 'missing-manifest' && f.reason.includes('在画布源码中不存在'))) ok('全局 handler 全部真实存在')
 
+/* 未定义符号调用（v1.2.2 现场事故回归）：runCouplingAnalysis 曾调用不存在的
+   fetchCouplingStale，ReferenceError 让「分析成功后的刷新链」在用户面前报
+   「耦合分析失败」。启发式（刻意不 lexer 全文——画布里的正则字面量含引号，
+   字符串剥离会失步）：只扫 <script> 块的**原文**，找「调用位」标识符
+   （`\bname\s*(`，前置不是 `.`、不是 `function` 定义位），凡整个语料只出现
+   1 次的调用位名字 ≈ 拼写错误——真实函数必然「定义 + 调用」≥ 2 次；
+   字符串/正则内容在此语料里不产生 `name(` 形状。 */
+{
+  const KEYWORDS = new Set(['function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'new', 'delete', 'typeof', 'instanceof', 'in', 'of', 'var', 'let', 'const', 'void', 'this', 'throw', 'try', 'catch', 'finally', 'with', 'debugger', 'yield', 'async', 'await'])
+  const GLOBALS = new Set(['window', 'document', 'Math', 'JSON', 'Date', 'Promise', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Error', 'TypeError', 'encodeURIComponent', 'decodeURIComponent', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'fetch', 'AbortSignal', 'navigator', 'location', 'history', 'localStorage', 'sessionStorage', 'console', 'Blob', 'URL', 'Event', 'KeyboardEvent', 'CustomEvent', 'getComputedStyle', 'matchMedia', 'Symbol', 'Map', 'Set', 'RegExp', 'structuredClone', 'queueMicrotask', 'alert',
+    /* CSS 函数名：出现在 transform/filter 等字符串中部（如 'px) scale('），
+       结构上无法与真实调用区分，按已知 CSS 函数放行。 */
+    'translate', 'translateX', 'translateY', 'translate3d', 'scale', 'scaleX', 'scaleY', 'scale3d', 'rotate', 'rotateX', 'rotateY', 'matrix', 'calc', 'min', 'max', 'clamp', 'linear-gradient', 'radial-gradient', 'rgba', 'rgb', 'hsla', 'hsl', 'url', 'blur', 'brightness', 'contrast', 'saturate', 'grayscale', 'var', 'env'])
+  const scripts = [...corpus.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n')
+  const callRe = /\b([A-Za-z_$][\w$]*)\s*\(/g
+  const counts = new Map()
+  let cm
+  while ((cm = callRe.exec(scripts))) {
+    const name = cm[1]
+    if (KEYWORDS.has(name)) continue
+    if (cm.index > 0 && scripts[cm.index - 1] === '.') continue // 成员调用
+    if (cm.index > 0 && (scripts[cm.index - 1] === '"' || scripts[cm.index - 1] === "'" || scripts[cm.index - 1] === '`')) continue // 字符串内容开头（如 transform 的 'translate('）
+    if (/\bfunction\s*$/.test(scripts.slice(Math.max(0, cm.index - 32), cm.index))) continue // 定义位（死代码另行观察）
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  const totalToken = (name) => (scripts.match(new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`, 'g')) ?? []).length
+  const ghosts = []
+  for (const [name] of counts) {
+    if (GLOBALS.has(name)) continue
+    if (totalToken(name) === 1) ghosts.push(name)
+  }
+  for (const name of ghosts) {
+    finding('undefined-symbol', { surface: 'canvas', key: name },
+      `符号 ${name} 被调用但在画布 JS 中从未定义（全语料只出现一次）`,
+      '大概率是拼写错误（现场事故：fetchCouplingStale → refreshCouplingStale）；核对真实函数名后修正调用')
+  }
+  if (ghosts.length === 0) ok('未定义符号调用：无（所有调用位符号在语料中出现 ≥2 次）')
+}
+
 /* --------------------------------------------------------- 3. 菜单审计 --- */
 
 /** 调用实参列表的**第一个顶层实参**（逗号感知：`items,x,y` → `items`）。 */
