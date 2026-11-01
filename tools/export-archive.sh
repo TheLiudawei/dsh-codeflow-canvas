@@ -10,11 +10,11 @@
 # Usage (macOS / Linux):
 #   bash tools/export-archive.sh [output.zip]
 #
-# Default output: ../dsh-codeflow-canvas-1.0.1.zip (next to the plugin folder).
+# Default output: ../dsh-codeflow-canvas-1.2.0.zip (next to the plugin folder).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-OUT="${1:-../dsh-codeflow-canvas-1.0.1.zip}"
+OUT="${1:-../dsh-codeflow-canvas-1.2.0.zip}"
 case "$OUT" in
   /*) : ;;
   *) OUT="$(pwd)/$OUT" ;;

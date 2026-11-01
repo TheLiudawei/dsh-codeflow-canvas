@@ -12,7 +12,7 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-$out = [IO.Path]::GetFullPath((Join-Path $root '..\dsh-codeflow-canvas-1.0.1.zip'))
+$out = [IO.Path]::GetFullPath((Join-Path $root '..\dsh-codeflow-canvas-1.2.0.zip'))
 if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Force }
 
 $stage = Join-Path $env:TEMP ('codeflow-export-' + [guid]::NewGuid().ToString('N'))
