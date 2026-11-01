@@ -1098,7 +1098,7 @@ function openNewDialog(){
 function openImportDialog(){
   openModal(dHead('folder-open','导入项目')
     +'<div class="cf-dbody">'
-    +'<div class="cf-hintbox">agent 将扫描目录：自动识别主语言、按各语言注释语法提取 TODO/FIXME 等标记，生成「扫描 → 注释解析 → 任务节点 → 审查 → 交付」工作流。最多读取 300 个文件。</div>'
+    +'<div class="cf-hintbox">agent 将扫描目录：自动识别主语言、按各语言注释语法提取 TODO/FIXME 等标记，生成「扫描 → 注释解析 → 任务节点 → 审查 → 交付」工作流。最多读取 1000 个文件。</div>'
     +fld('项目路径','<input class="cf-in" data-f="path" placeholder="绝对路径或工作区相对路径，如 D:\\code\\legacy-app 或 ./server">')
     +'<div class="cf-row2">'
     +fld('递归深度',selHtml('depth',['2','4','6','10'],'4'))

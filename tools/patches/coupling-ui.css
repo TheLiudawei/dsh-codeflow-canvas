@@ -1,0 +1,76 @@
+/* ============================================================================
+ * v1.2：模块耦合分析（屎山程度卡片 / 节点耦合徽章 / 过期灰化 / 详情表）
+ * ----------------------------------------------------------------------------
+ * 由 tools/port-canvas.mjs 注入到样式表（FEATURES_CSS 之后、LIGHT_CSS 之前）。
+ * 颜色契约（任务书附录 E，深浅两套都过 WCAG AA）：
+ *   低 #22c55e（绿） · 中 #eab308（黄） · 高 #ef4444（红）
+ *   浅色主题文字加深一档：#15803d / #a16207 / #b91c1c，背景统一 12% 透明度
+ *   （tests/contrast.mjs 按同一组 token 审计）。
+ * ========================================================================= */
+
+/* ---- 左上角「屎山程度」卡片（绝对定位，z-index 低于菜单/弹窗/监视器） ---- */
+.cf-coupling-card{position:absolute; top:10px; left:10px; z-index:6; max-width:300px;
+  background:rgba(24,24,31,.94); border:1px solid var(--cf-border); border-radius:10px;
+  box-shadow:0 6px 20px rgba(0,0,0,.4); font-size:11.5px; color:var(--cf-dim);
+  padding:7px 11px; cursor:pointer; user-select:none; line-height:1.5;}
+.cf-coupling-card:hover{border-color:var(--cf-border2); color:var(--cf-text);}
+.cf-coupling-line1{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--cf-text);}
+.cf-coupling-dot{width:9px; height:9px; border-radius:50%; flex:0 0 9px;}
+.cf-coupling-extra{font-size:10.5px; font-weight:400; color:var(--cf-dim); white-space:nowrap;}
+.cf-coupling-line2{font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cf-coupling-card.stale{filter:saturate(.45); opacity:.88;}
+.cf-coupling-card.stale .cf-coupling-line1{color:var(--cf-dim);}
+
+/* ---- 节点徽章：状态徽章左侧的小胶囊（data-level 控色） ---- */
+.cf-coupling-badge{font-size:9.5px; padding:0 6px; border-radius:9px; border:1px solid;
+  flex:0 0 auto; white-space:nowrap; line-height:1.5;}
+.cf-coupling-badge[data-level="low"]{color:#22c55e; border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12);}
+.cf-coupling-badge[data-level="medium"]{color:#eab308; border-color:rgba(234,179,8,.45); background:rgba(234,179,8,.12);}
+.cf-coupling-badge[data-level="high"]{color:#ef4444; border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.14);}
+.cf-coupling-badge.stale{border-style:dashed; filter:grayscale(.7); opacity:.8;}
+
+/* ---- 节点卡片右缘 3px 内阴影色条（子元素，不改节点尺寸/端口位置） ---- */
+.cf-coupling-edge{position:absolute; top:0; right:0; bottom:0; width:3px; pointer-events:none;
+  border-radius:0 10px 10px 0;}
+.cf-coupling-edge[data-level="low"]{background:#22c55e;}
+.cf-coupling-edge[data-level="medium"]{background:#eab308;}
+.cf-coupling-edge[data-level="high"]{background:#ef4444;}
+.cf-coupling-edge.stale{opacity:.35;}
+
+/* ---- 详情弹窗：模块表格 ---- */
+.cf-coupling-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:2px;}
+.cf-coupling-table th{text-align:left; font-weight:500; color:var(--cf-dim); padding:3px 8px;
+  border-bottom:1px solid var(--cf-border); white-space:nowrap;}
+.cf-coupling-table td{padding:3px 8px; border-bottom:1px solid var(--cf-border);
+  font-variant-numeric:tabular-nums; color:var(--cf-text); white-space:nowrap;}
+.cf-coupling-table td.dim{color:var(--cf-dim);}
+.cf-coupling-level{font-size:10px; padding:0 7px; border-radius:9px; border:1px solid; white-space:nowrap;}
+.cf-coupling-level[data-level="low"]{color:#22c55e; border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12);}
+.cf-coupling-level[data-level="medium"]{color:#eab308; border-color:rgba(234,179,8,.45); background:rgba(234,179,8,.12);}
+.cf-coupling-level[data-level="high"]{color:#ef4444; border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.14);}
+
+/* ---- 浅色主题覆盖（与 features-ui.css 同一模式：一律带属性前缀） ---- */
+html[data-cf-theme="light"] .cf-coupling-card{background:rgba(255,255,255,.97); box-shadow:0 6px 18px rgba(16,24,40,.10);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="low"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="low"]{color:#15803d; border-color:rgba(21,128,61,.4); background:rgba(34,197,94,.12);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="medium"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="medium"]{color:#a16207; border-color:rgba(161,98,7,.4); background:rgba(234,179,8,.12);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="high"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="high"]{color:#b91c1c; border-color:rgba(185,28,28,.4); background:rgba(239,68,68,.12);}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="low"]{background:#15803d;}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="medium"]{background:#a16207;}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="high"]{background:#b91c1c;}
+html[data-cf-theme="light"] .cf-coupling-table td{border-bottom-color:#dee3ea;}
+
+/* ---- 拖拽导入：全屏遮罩 / 确认框行 / 进度条 ---- */
+.cf-drop-overlay{position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+  background:rgba(124,140,255,.10); border:2px dashed rgba(124,140,255,.55); border-radius:10px;
+  pointer-events:none; font-size:14px; font-weight:600; color:#b9c2ff; letter-spacing:.5px;}
+.cf-drop-row{display:flex; align-items:baseline; gap:8px; font-size:12px; margin-top:6px;}
+.cf-drop-row b{flex:0 0 auto; color:var(--cf-dim); font-weight:500; font-size:11.5px;}
+.cf-drop-row span{color:var(--cf-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
+.cf-drop-progress{height:5px; border-radius:3px; background:#2a2a38; overflow:hidden; margin-top:8px;}
+.cf-drop-progress>i{display:block; height:100%; width:0; background:var(--cf-accent); border-radius:3px;
+  transition:width .2s ease;}
+html[data-cf-theme="light"] .cf-drop-overlay{background:rgba(79,91,213,.06); border-color:rgba(79,91,213,.5); color:#3b46b8;}
+html[data-cf-theme="light"] .cf-drop-progress{background:#e2e8f0;}

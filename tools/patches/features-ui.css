@@ -1,0 +1,48 @@
+/* ============================================================================
+ * v1.1：功能分组（features.json）/ 整组高亮 / 功能归属 chips
+ * ----------------------------------------------------------------------------
+ * 由 tools/port-canvas.mjs 注入到样式表（EXTRA_CSS 之前、LIGHT_CSS 之前）。
+ * 浅色覆盖统一带 html[data-cf-theme="light"] 前缀（见文件末尾），保证浅色
+ * 对比度不低于现有阈值（tests/contrast.mjs 审计）。
+ * ========================================================================= */
+
+/* ---- 二级浮层：分组行 / 成员行功能标签 / 未识别横幅 ---- */
+.cf-fgroup{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;}
+.cf-fgroup:hover,.cf-fgroup.active{background:rgba(124,140,255,.14);border-color:rgba(124,140,255,.35);}
+.cf-fgroup:focus-visible{outline:1px solid var(--cf-accent);outline-offset:1px;}
+.cf-farrow{flex:0 0 12px;width:12px;font-size:9px;color:var(--cf-dim);text-align:center;cursor:pointer;}
+.cf-farrow:hover{color:var(--cf-text);}
+.cf-fgroup-name{font-size:12px;font-weight:600;color:var(--cf-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf-fgroup-count{font-size:10.5px;color:var(--cf-dim);flex:0 0 auto;white-space:nowrap;}
+.cf-fgroup-low{font-size:9.5px;padding:0 5px;border-radius:8px;border:1px solid rgba(245,158,11,.5);color:#fbbf24;flex:0 0 auto;white-space:nowrap;}
+.cf-fgroup-hint{font-size:10px;color:var(--cf-accent);flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cf-ftag{font-size:9.5px;padding:0 6px;border-radius:10px;border:1px solid var(--cf-border2);color:var(--cf-dim);flex:0 0 auto;white-space:nowrap;max-width:92px;overflow:hidden;text-overflow:ellipsis;}
+.cf-fempty{display:flex;align-items:center;gap:8px;padding:7px 9px;margin:1px 0 3px;border:1px dashed var(--cf-border2);border-radius:8px;font-size:11.5px;color:var(--cf-dim);}
+.cf-fempty>span{flex:1;min-width:0;}
+.cf-fempty-btn{flex:0 0 auto;}
+
+/* ---- 整组高亮（spotlight）：组外变暗 / 组内节点描边 / 组内连线提亮 / 虚线框 ---- */
+#codeflow-canvas.cf-spotlight .cf-node:not(.cf-spot){opacity:.3;}
+.cf-node.cf-spot{border-color:var(--cf-accent) !important;box-shadow:0 0 0 3px rgba(124,140,255,.35),0 4px 16px rgba(0,0,0,.45);}
+.cf-link.cf-spot-link{stroke:var(--cf-accent);stroke-width:3;}
+.cf-spotbox{position:absolute;z-index:3;border:1.5px dashed var(--cf-accent);border-radius:12px;pointer-events:none;background:rgba(124,140,255,.05);}
+.cf-spotbox-label{position:absolute;left:-1px;top:-21px;background:var(--cf-accent);color:#0e0e14;font-size:10.5px;font-weight:600;line-height:1.6;padding:0 8px;border-radius:8px;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis;}
+
+/* ---- 详情弹窗：功能归属 chips ---- */
+.cf-fchips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0;}
+.cf-fchip{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;padding:1px 3px 1px 8px;border-radius:10px;border:1px solid var(--cf-border2);background:var(--cf-panel2);color:var(--cf-text);max-width:180px;}
+.cf-fchip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf-fchip-x{background:none;border:none;color:var(--cf-dim);cursor:pointer;font-size:11px;padding:0 3px;line-height:1.2;}
+.cf-fchip-x:hover{color:var(--cf-danger);}
+.cf-fchip-add{background:none;border:1px dashed var(--cf-border2);color:var(--cf-dim);cursor:pointer;font-size:11px;border-radius:10px;padding:0 7px;line-height:1.6;}
+.cf-fchip-add:hover{border-color:var(--cf-accent);color:var(--cf-accent);}
+
+/* ---- 浅色主题覆盖（与深色规则一一对应；颜色取现有浅色调色板） ---- */
+html[data-cf-theme="light"] .cf-fgroup:hover,html[data-cf-theme="light"] .cf-fgroup.active{background:rgba(79,91,213,.09);border-color:rgba(79,91,213,.30);}
+html[data-cf-theme="light"] .cf-fgroup-low{color:#b45309;border-color:rgba(180,83,9,.45);}
+html[data-cf-theme="light"] .cf-ftag{border-color:#c6cedb;color:#5d6673;}
+html[data-cf-theme="light"] .cf-node.cf-spot{box-shadow:0 0 0 3px rgba(79,91,213,.30),0 6px 18px rgba(16,24,40,.14);}
+html[data-cf-theme="light"] .cf-spotbox{background:rgba(79,91,213,.04);}
+html[data-cf-theme="light"] .cf-spotbox-label{color:#ffffff;}
+html[data-cf-theme="light"] .cf-fchip{background:#ffffff;}
+html[data-cf-theme="light"] .cf-fchip-x:hover{color:#b42318;}

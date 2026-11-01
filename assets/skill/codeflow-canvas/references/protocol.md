@@ -90,6 +90,25 @@ LIFO（跨视图运行也共用一个"只能撤销最新一次"），但恢复�
 **正常情况下不会出现**：面板的"保存"按钮由宿主直接落盘（两个视图都落），不惊动 agent。
 保留这个动作名是为了兼容手工构造的请求。
 
+### `[CodeFlow:FEATURES]` 功能归属识别（v1.1）
+
+用户在画布「方案/构建」浮层里点了「让 agent 识别」时发出——这是功能识别**唯一**的模型路径，
+打开菜单/渲染浮层本身零模型调用。`candidates` 已经列出未归属的模块节点，**不要扫全库**：
+
+```json
+{"action":"FEATURES","project":"todo-cli","view":"modules","rev":7,"graphPath":"/ws/CodeFlow/flow-projects/todo-cli/workflow.modules.json","featuresPath":"/ws/CodeFlow/flow-projects/todo-cli/features.json","candidates":[{"id":"m7","title":"utils.py","path":"src/utils.py"}],"reason":"用户在画布上点击了「让 agent 识别」"}
+
+本次识别要求（必须遵守）：
+1. 只针对 candidates 列出的未归属模块做功能识别；不要重扫全部代码、不要读取无关文件；
+2. 结合节点标题、params.path 与你已有的项目知识判断功能归属；不确定的节点宁可不标（保持未归属），不要为了好看硬归类；
+3. 用 codeflow_features 工具一次性写入（op="write"），不要逐条调用、不要修改图文件、不要 bump rev；
+4. 写入完成后回复一行摘要（识别了几个功能、多少模块仍未归属）。
+```
+
+- `featuresPath` 指向项目的 `features.json`：识别结果写进它的 `manual` 段，重建时原样保留，放心写。
+- 归属的**持久键是文件**（相对源码根、`/` 分隔）；节点 id 只是当前图的缓存。
+- 写入只走 `codeflow_features`（op="write"）；**绝不**用 `codeflow_canvas` 改图、不 bump 任何 `rev`。
+
 ## 2. agent → 画布（回填）
 
 **首选通道（v0.5.1 起）：改文件 + `load`。** 用你的文件编辑工具把更新后的整图直接写入

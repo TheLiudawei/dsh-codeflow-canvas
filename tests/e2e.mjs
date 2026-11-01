@@ -23,7 +23,7 @@ const handler = createRouter({
   store,
   logger: console,
   resolveCwd: async () => workspace,
-  submit: async (g) => ({ sessionId: 'sess-e2e', gesture: g }),
+  submit: async (g) => { submitCalls += 1; return { sessionId: 'sess-e2e', gesture: g } },
   ensureSession: async () => ({ sessionId: 'sess-e2e', created: false }),
 })
 const server = createServer((req, res) => handler(req, res).catch(() => {
@@ -33,6 +33,7 @@ const server = createServer((req, res) => handler(req, res).catch(() => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const base = `http://127.0.0.1:${server.address().port}`
 let passed = 0
+let submitCalls = 0
 const ok = (name) => { passed += 1; console.log('  ok ', name) }
 
 const graph = (name, nodes = 1) => ({
@@ -409,6 +410,225 @@ let dualProject = null
   ok('legacy flow-projects/ project migrates on first boot and boot loads it afterwards')
 }
 
+/* ---- v1.2: coupling analysis over real HTTP ---- */
+
+/** A source tree with a genuine cycle so the analysis has something to say. */
+const couplingSrc = path.join(workspace, 'coupling-src')
+{
+  await mkdir(couplingSrc, { recursive: true })
+  await writeFile(path.join(couplingSrc, 'a.py'), 'import b\nimport c\ndef fa():\n    return b.fb() + c.fc()\n', 'utf8')
+  await writeFile(path.join(couplingSrc, 'b.py'), 'import a\ndef fb():\n    return a.fa()\n', 'utf8')
+  await writeFile(path.join(couplingSrc, 'c.py'), 'def fc():\n    return 1\n', 'utf8')
+}
+
+/* 18. import auto-couples: nodes + meta on modules, source:modules mirror on tasks */
+let couplingProject = null
+{
+  const r = await post('/codeflow/api/import', { path: couplingSrc })
+  const j = await r.json()
+  assert.equal(r.status, 200); assert.equal(j.ok, true)
+  couplingProject = j.project
+  assert.ok(j.coupling && j.coupling.overall, `import response carries coupling: ${JSON.stringify(j.coupling)}`)
+  assert.equal(j.coupling.overall.modules >= 3, true)
+  assert.equal(typeof j.coupling.overall.score, 'number')
+  const dir = path.join(workspace, 'CodeFlow', 'flow-projects', couplingProject)
+  const modulesDisk = JSON.parse(await readFile(path.join(dir, 'workflow.modules.json'), 'utf8'))
+  const analyzed = modulesDisk.nodes.filter((n) => n.coupling)
+  assert.ok(analyzed.length >= 3, `every file module got a coupling label (${analyzed.length})`)
+  assert.ok(analyzed.every((n) => ['low', 'medium', 'high'].includes(n.coupling.level)))
+  assert.equal(modulesDisk.meta.coupling.source, undefined, 'modules meta has no source')
+  const tasksDisk = JSON.parse(await readFile(path.join(dir, 'workflow.json'), 'utf8'))
+  assert.equal(tasksDisk.meta.coupling.source, 'modules', 'tasks meta mirrors with source:modules')
+  assert.ok(tasksDisk.nodes.every((n) => n.coupling === undefined), 'tasks nodes stay clean')
+  ok(`import auto-couples: ${analyzed.length} nodes labeled, overall ${j.coupling.overall.level} (${j.coupling.overall.score}), tasks mirror tagged`)
+}
+
+/* 19. POST /api/coupling single node → partial; GET → stale flips with mtime */
+{
+  const state = await (await get(`/codeflow/api/state?project=${couplingProject}&view=modules`)).json()
+  const node = state.graph.nodes.find((n) => n.type === 'module' && n.params.symbol === '')
+  const r = await post('/codeflow/api/coupling', { project: couplingProject, nodeId: node.id })
+  const j = await r.json()
+  assert.equal(r.status, 200, JSON.stringify(j))
+  assert.equal(j.ok, true); assert.equal(j.view, 'modules')
+  assert.equal(j.partial, true, 'single-node run is partial')
+  assert.equal(j.overall.analyzed, 1)
+  assert.equal(j.updated.length, 1)
+  assert.equal(j.updated[0].id, node.id)
+  assert.equal(typeof j.rev, 'number')
+  const g1 = await (await get(`/codeflow/api/coupling?project=${couplingProject}&view=modules`)).json()
+  assert.equal(g1.ok, true)
+  assert.equal(g1.stale.overall, false, 'fresh analysis is not stale')
+  // 拨动源文件 mtime 到"未来" → 重新分析一次（新的 meta.at 使 10s 缓存键失效），
+  // 再查过期：coupling.at 早于 mtime → stale。
+  const future = new Date(Date.now() + 5000)
+  const { utimes } = await import('node:fs/promises')
+  await utimes(node.params.path, future, future)
+  await post('/codeflow/api/coupling', { project: couplingProject })
+  const g2 = await (await get(`/codeflow/api/coupling?project=${couplingProject}&view=modules`)).json()
+  assert.equal(g2.stale.overall, true, 'newer mtime marks the node stale')
+  assert.equal(g2.stale.nodes[node.id], true)
+  ok(`coupling single-node + staleness over HTTP (partial ${j.overall.analyzed}/${j.overall.modules}, stale after touch)`)
+}
+
+/* 20. POST /api/coupling refuses projects without a modules view */
+{
+  await post('/codeflow/api/state', { graph: graph('e2e-nomod') })
+  const r = await post('/codeflow/api/coupling', { project: 'e2e-nomod' })
+  assert.equal(r.status, 400)
+  const j = await r.json()
+  assert.equal(j.ok, false)
+  assert.ok(j.error.includes('模块结构图'), j.error)
+  ok(`coupling without a modules view → 400 "${j.error}"`)
+}
+
+/* 21. drop upload protocol end-to-end (dir): begin → file → finalize → project */
+const dropSrcName = 'drop-folder'
+{
+  const begin = await post('/codeflow/api/drop/begin', { kind: 'dir', name: dropSrcName, files: 2, bytes: 30 })
+  const bj = await begin.json()
+  assert.equal(begin.status, 200); assert.ok(bj.token)
+  const file = async (rel, body) => fetch(`${base}/codeflow/api/drop/file?token=${encodeURIComponent(bj.token)}&path=${encodeURIComponent(rel)}`, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body,
+  })
+  const f1 = await file('main.py', 'print("drop")\n')
+  assert.equal((await f1.json()).received, 1)
+  const f2 = await file('lib/util.py', 'u = 1\n')
+  assert.equal((await f2.json()).received, 2)
+  const fin = await post('/codeflow/api/drop/finalize', { token: bj.token, kind: 'dir', projectName: dropSrcName, depth: 4, fromComments: true, addTests: true })
+  const fj = await fin.json()
+  assert.equal(fin.status, 200, JSON.stringify(fj))
+  assert.equal(fj.ok, true)
+  assert.equal(fj.project, dropSrcName)
+  assert.ok(fj.coupling && fj.coupling.overall, 'finalize auto-couples too')
+  assert.equal(fj.extractedTo, path.join(workspace, 'CodeFlow', 'imports', dropSrcName))
+  assert.ok(await readFile(path.join(fj.extractedTo, 'main.py'), 'utf8').then(() => true, () => false))
+  // 暂存区已清理。
+  const staging = await readdir(path.join(workspace, 'CodeFlow', 'imports', '.staging')).catch(() => [])
+  assert.equal(staging.length, 0, `staging empty after finalize (${staging.join(',')})`)
+  ok(`drop dir upload → project ${fj.project} imported at imports/${dropSrcName}, staged tree cleaned`)
+}
+
+/* 22. drop upload of a zip: extraction + dehusk + import, then conflict 409 → rename */
+{
+  // 最小 zip 写入器（store 方法，测试专用；本地头/中央目录尺寸都要写对）。
+  const buildZip = (entries) => {
+    const locals = []
+    const centrals = []
+    let offset = 0
+    for (const [name, data] of entries) {
+      const nameBuf = Buffer.from(name, 'utf8')
+      const local = Buffer.alloc(30)
+      local.writeUInt32LE(0x04034b50, 0)
+      local.writeUInt32LE(data.length, 18) // compressed size (store)
+      local.writeUInt32LE(data.length, 22) // uncompressed size
+      local.writeUInt16LE(nameBuf.length, 26)
+      locals.push(local, nameBuf, data)
+      const central = Buffer.alloc(46)
+      central.writeUInt32LE(0x02014b50, 0)
+      central.writeUInt32LE(data.length, 20) // compressed size
+      central.writeUInt32LE(data.length, 24) // uncompressed size
+      central.writeUInt16LE(nameBuf.length, 28)
+      central.writeUInt32LE(offset, 42)
+      centrals.push(central, nameBuf)
+      offset += 30 + nameBuf.length + data.length
+    }
+    const centralBody = Buffer.concat(centrals)
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(entries.length, 8)
+    eocd.writeUInt16LE(entries.length, 10)
+    eocd.writeUInt32LE(centralBody.length, 12)
+    eocd.writeUInt32LE(offset, 16)
+    return Buffer.concat([...locals, centralBody, eocd])
+  }
+  const zip = buildZip([['zipproj/main.py', Buffer.from('print("zip")\n', 'utf8')], ['zipproj/readme.md', Buffer.from('# z\n', 'utf8')]])
+  const begin = await post('/codeflow/api/drop/begin', { kind: 'archive', name: 'zipped.zip', files: 1, bytes: zip.length })
+  const bj = await begin.json()
+  assert.equal(begin.status, 200)
+  const up = await fetch(`${base}/codeflow/api/drop/file?token=${encodeURIComponent(bj.token)}&path=${encodeURIComponent('zipped.zip')}`, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: zip,
+  })
+  assert.equal(up.status, 200)
+  const fin = await post('/codeflow/api/drop/finalize', { token: bj.token, kind: 'archive', projectName: 'zipped', depth: 4 })
+  const fj = await fin.json()
+  assert.equal(fin.status, 200, JSON.stringify(fj))
+  assert.equal(fj.project, 'zipped')
+  assert.equal(fj.extractedTo, path.join(workspace, 'CodeFlow', 'imports', 'zipped'))
+  const inner = path.join(fj.extractedTo, 'zipproj', 'main.py')
+  assert.equal(await readFile(inner, 'utf8'), 'print("zip")\n', 'the single root dir is kept, files extracted under it')
+  // 再次拖入同名包 → 409 conflict（imports/<包名> 目录先撞）；改名重试 → zipped-2。
+  const begin2 = await post('/codeflow/api/drop/begin', { kind: 'archive', name: 'zipped.zip', files: 1, bytes: zip.length })
+  const bj2 = await begin2.json()
+  await fetch(`${base}/codeflow/api/drop/file?token=${encodeURIComponent(bj2.token)}&path=${encodeURIComponent('zipped.zip')}`, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: zip,
+  })
+  const conflict = await post('/codeflow/api/drop/finalize', { token: bj2.token, kind: 'archive', projectName: 'zipped' })
+  assert.equal(conflict.status, 409)
+  const cj = await conflict.json()
+  assert.equal(cj.code, 'conflict')
+  assert.ok(cj.target === 'dir' || cj.target === 'project', `conflict target: ${cj.target}`)
+  const renamed = await post('/codeflow/api/drop/finalize', { token: bj2.token, kind: 'archive', projectName: 'zipped', rename: true })
+  const rj = await renamed.json()
+  assert.equal(renamed.status, 200, JSON.stringify(rj))
+  assert.equal(rj.project, 'zipped-2', `rename retry lands on ${rj.project}`)
+  // 项目名专项冲突：包名不同、项目名相同 → 409 target:'project'。
+  const zip3 = buildZip([['other/main.py', Buffer.from('print(3)\n', 'utf8')]])
+  const begin3 = await post('/codeflow/api/drop/begin', { kind: 'archive', name: 'another.zip', files: 1, bytes: zip3.length })
+  const bj3 = await begin3.json()
+  await fetch(`${base}/codeflow/api/drop/file?token=${encodeURIComponent(bj3.token)}&path=${encodeURIComponent('another.zip')}`, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: zip3,
+  })
+  const projectConflict = await post('/codeflow/api/drop/finalize', { token: bj3.token, kind: 'archive', projectName: 'zipped' })
+  assert.equal(projectConflict.status, 409)
+  const pj = await projectConflict.json()
+  assert.equal(pj.code, 'conflict')
+  assert.equal(pj.target, 'project')
+  assert.equal(pj.current, 'zipped')
+  ok(`drop zip upload → extracted + imported; conflict 409 (dir then project) → rename retry → zipped-2`)
+}
+
+/* 23. zip-slip through the upload channel is refused and cleans up */
+{
+  const zip = Buffer.alloc(0)
+  void zip
+  // 直接打 finalize 不带 token → 400（会话不存在），先验证；再验证 slip 由
+  // drop-import.mjs 的解析器测试覆盖（这里验证路由会话闸门）。
+  const noToken = await post('/codeflow/api/drop/finalize', { token: '00000000-0000-4000-8000-000000000000', kind: 'dir', projectName: 'ghost' })
+  assert.equal(noToken.status, 400)
+  assert.ok((await noToken.json()).error.includes('上传会话不存在'))
+  // abort 幂等。
+  const aborted = await post('/codeflow/api/drop/abort', { token: 'whatever' })
+  assert.equal(aborted.status, 200)
+  assert.equal((await aborted.json()).ok, true)
+  ok('drop finalize without a session → 400; abort is idempotent over HTTP')
+}
+
+/* 24. drop/path: a real, in-place folder imports without being copied */
+{
+  const inplace = path.join(workspace, 'inplace-src')
+  await mkdir(inplace, { recursive: true })
+  await writeFile(path.join(inplace, 'app.py'), 'print("inplace")\n', 'utf8')
+  const r = await post('/codeflow/api/drop/path', { path: inplace, kind: 'dir', projectName: 'inplace', depth: 4, fromComments: true, addTests: false })
+  const j = await r.json()
+  assert.equal(r.status, 200, JSON.stringify(j))
+  assert.equal(j.ok, true)
+  assert.equal(j.project, 'inplace')
+  assert.equal(j.sourceRoot, inplace, 'imported in place')
+  assert.equal(j.extractedTo, undefined, 'no imports/ copy for the real-path channel')
+  assert.ok(j.coupling && j.coupling.overall, 'in-place import auto-couples too')
+  const copied = await readdir(path.join(workspace, 'CodeFlow', 'imports')).catch(() => [])
+  assert.ok(!copied.includes('inplace'), 'nothing copied into imports/')
+  ok(`drop/path in-place folder → project ${j.project} imported from where it is, no copy`)
+}
+
+/* 25. zero-LLM across the whole run: no canvas route ever woke the agent */
+{
+  assert.equal(submitCalls, 0, `the agent was woken ${submitCalls} time(s) by import/coupling/drop flows`)
+  ok(`zero-LLM end to end: import/coupling/drop never delivered a gesture to any session`)
+}
+
 await new Promise((resolve) => server.close(resolve))
+handler.dispose?.()
 await rm(workspace, { recursive: true, force: true })
 console.log(`\nsmoke: ${passed} scenarios passed`)

@@ -17,6 +17,7 @@
     </div>
     <button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall" data-tooltip="按拓扑顺序执行所有待运行节点"><i data-lucide="play"></i>运行全部</button>
     <button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>
+    <button type="button" class="cf-tbtn" id="cf-tb-coupling" data-tooltip="耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent）" aria-label="耦合分析" disabled><i data-lucide="activity"></i>耦合分析</button>
     <button type="button" class="cf-tbtn" id="cf-tb-layout" data-tooltip="按依赖关系自动排列节点"><i data-lucide="layout-list"></i>整理布局</button>
     <button type="button" class="cf-tbtn" id="cf-tb-fit" data-tooltip="缩放到全部节点可见"><i data-lucide="maximize"></i>适应视图</button>
     <span class="cf-tgrow"></span>
@@ -256,6 +257,132 @@ select.cf-in{cursor:pointer;}
 .cf-spin{display:inline-block; animation:cf-rot 1.1s linear infinite;}
 @keyframes cf-rot{to{transform:rotate(360deg);}}
 .cf-banner-x{background:none; border:none; color:#c3cbff; cursor:pointer; font-size:12px; padding:0 2px;}
+
+/* ============================================================================
+ * v1.1：功能分组（features.json）/ 整组高亮 / 功能归属 chips
+ * ----------------------------------------------------------------------------
+ * 由 tools/port-canvas.mjs 注入到样式表（EXTRA_CSS 之前、LIGHT_CSS 之前）。
+ * 浅色覆盖统一带 html[data-cf-theme="light"] 前缀（见文件末尾），保证浅色
+ * 对比度不低于现有阈值（tests/contrast.mjs 审计）。
+ * ========================================================================= */
+
+/* ---- 二级浮层：分组行 / 成员行功能标签 / 未识别横幅 ---- */
+.cf-fgroup{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;}
+.cf-fgroup:hover,.cf-fgroup.active{background:rgba(124,140,255,.14);border-color:rgba(124,140,255,.35);}
+.cf-fgroup:focus-visible{outline:1px solid var(--cf-accent);outline-offset:1px;}
+.cf-farrow{flex:0 0 12px;width:12px;font-size:9px;color:var(--cf-dim);text-align:center;cursor:pointer;}
+.cf-farrow:hover{color:var(--cf-text);}
+.cf-fgroup-name{font-size:12px;font-weight:600;color:var(--cf-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf-fgroup-count{font-size:10.5px;color:var(--cf-dim);flex:0 0 auto;white-space:nowrap;}
+.cf-fgroup-low{font-size:9.5px;padding:0 5px;border-radius:8px;border:1px solid rgba(245,158,11,.5);color:#fbbf24;flex:0 0 auto;white-space:nowrap;}
+.cf-fgroup-hint{font-size:10px;color:var(--cf-accent);flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cf-ftag{font-size:9.5px;padding:0 6px;border-radius:10px;border:1px solid var(--cf-border2);color:var(--cf-dim);flex:0 0 auto;white-space:nowrap;max-width:92px;overflow:hidden;text-overflow:ellipsis;}
+.cf-fempty{display:flex;align-items:center;gap:8px;padding:7px 9px;margin:1px 0 3px;border:1px dashed var(--cf-border2);border-radius:8px;font-size:11.5px;color:var(--cf-dim);}
+.cf-fempty>span{flex:1;min-width:0;}
+.cf-fempty-btn{flex:0 0 auto;}
+
+/* ---- 整组高亮（spotlight）：组外变暗 / 组内节点描边 / 组内连线提亮 / 虚线框 ---- */
+#codeflow-canvas.cf-spotlight .cf-node:not(.cf-spot){opacity:.3;}
+.cf-node.cf-spot{border-color:var(--cf-accent) !important;box-shadow:0 0 0 3px rgba(124,140,255,.35),0 4px 16px rgba(0,0,0,.45);}
+.cf-link.cf-spot-link{stroke:var(--cf-accent);stroke-width:3;}
+.cf-spotbox{position:absolute;z-index:3;border:1.5px dashed var(--cf-accent);border-radius:12px;pointer-events:none;background:rgba(124,140,255,.05);}
+.cf-spotbox-label{position:absolute;left:-1px;top:-21px;background:var(--cf-accent);color:#0e0e14;font-size:10.5px;font-weight:600;line-height:1.6;padding:0 8px;border-radius:8px;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis;}
+
+/* ---- 详情弹窗：功能归属 chips ---- */
+.cf-fchips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0;}
+.cf-fchip{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;padding:1px 3px 1px 8px;border-radius:10px;border:1px solid var(--cf-border2);background:var(--cf-panel2);color:var(--cf-text);max-width:180px;}
+.cf-fchip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf-fchip-x{background:none;border:none;color:var(--cf-dim);cursor:pointer;font-size:11px;padding:0 3px;line-height:1.2;}
+.cf-fchip-x:hover{color:var(--cf-danger);}
+.cf-fchip-add{background:none;border:1px dashed var(--cf-border2);color:var(--cf-dim);cursor:pointer;font-size:11px;border-radius:10px;padding:0 7px;line-height:1.6;}
+.cf-fchip-add:hover{border-color:var(--cf-accent);color:var(--cf-accent);}
+
+/* ---- 浅色主题覆盖（与深色规则一一对应；颜色取现有浅色调色板） ---- */
+html[data-cf-theme="light"] .cf-fgroup:hover,html[data-cf-theme="light"] .cf-fgroup.active{background:rgba(79,91,213,.09);border-color:rgba(79,91,213,.30);}
+html[data-cf-theme="light"] .cf-fgroup-low{color:#b45309;border-color:rgba(180,83,9,.45);}
+html[data-cf-theme="light"] .cf-ftag{border-color:#c6cedb;color:#5d6673;}
+html[data-cf-theme="light"] .cf-node.cf-spot{box-shadow:0 0 0 3px rgba(79,91,213,.30),0 6px 18px rgba(16,24,40,.14);}
+html[data-cf-theme="light"] .cf-spotbox{background:rgba(79,91,213,.04);}
+html[data-cf-theme="light"] .cf-spotbox-label{color:#ffffff;}
+html[data-cf-theme="light"] .cf-fchip{background:#ffffff;}
+html[data-cf-theme="light"] .cf-fchip-x:hover{color:#b42318;}
+
+/* ============================================================================
+ * v1.2：模块耦合分析（屎山程度卡片 / 节点耦合徽章 / 过期灰化 / 详情表）
+ * ----------------------------------------------------------------------------
+ * 由 tools/port-canvas.mjs 注入到样式表（FEATURES_CSS 之后、LIGHT_CSS 之前）。
+ * 颜色契约（任务书附录 E，深浅两套都过 WCAG AA）：
+ *   低 #22c55e（绿） · 中 #eab308（黄） · 高 #ef4444（红）
+ *   浅色主题文字加深一档：#15803d / #a16207 / #b91c1c，背景统一 12% 透明度
+ *   （tests/contrast.mjs 按同一组 token 审计）。
+ * ========================================================================= */
+
+/* ---- 左上角「屎山程度」卡片（绝对定位，z-index 低于菜单/弹窗/监视器） ---- */
+.cf-coupling-card{position:absolute; top:10px; left:10px; z-index:6; max-width:300px;
+  background:rgba(24,24,31,.94); border:1px solid var(--cf-border); border-radius:10px;
+  box-shadow:0 6px 20px rgba(0,0,0,.4); font-size:11.5px; color:var(--cf-dim);
+  padding:7px 11px; cursor:pointer; user-select:none; line-height:1.5;}
+.cf-coupling-card:hover{border-color:var(--cf-border2); color:var(--cf-text);}
+.cf-coupling-line1{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--cf-text);}
+.cf-coupling-dot{width:9px; height:9px; border-radius:50%; flex:0 0 9px;}
+.cf-coupling-extra{font-size:10.5px; font-weight:400; color:var(--cf-dim); white-space:nowrap;}
+.cf-coupling-line2{font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cf-coupling-card.stale{filter:saturate(.45); opacity:.88;}
+.cf-coupling-card.stale .cf-coupling-line1{color:var(--cf-dim);}
+
+/* ---- 节点徽章：状态徽章左侧的小胶囊（data-level 控色） ---- */
+.cf-coupling-badge{font-size:9.5px; padding:0 6px; border-radius:9px; border:1px solid;
+  flex:0 0 auto; white-space:nowrap; line-height:1.5;}
+.cf-coupling-badge[data-level="low"]{color:#22c55e; border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12);}
+.cf-coupling-badge[data-level="medium"]{color:#eab308; border-color:rgba(234,179,8,.45); background:rgba(234,179,8,.12);}
+.cf-coupling-badge[data-level="high"]{color:#ef4444; border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.14);}
+.cf-coupling-badge.stale{border-style:dashed; filter:grayscale(.7); opacity:.8;}
+
+/* ---- 节点卡片右缘 3px 内阴影色条（子元素，不改节点尺寸/端口位置） ---- */
+.cf-coupling-edge{position:absolute; top:0; right:0; bottom:0; width:3px; pointer-events:none;
+  border-radius:0 10px 10px 0;}
+.cf-coupling-edge[data-level="low"]{background:#22c55e;}
+.cf-coupling-edge[data-level="medium"]{background:#eab308;}
+.cf-coupling-edge[data-level="high"]{background:#ef4444;}
+.cf-coupling-edge.stale{opacity:.35;}
+
+/* ---- 详情弹窗：模块表格 ---- */
+.cf-coupling-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:2px;}
+.cf-coupling-table th{text-align:left; font-weight:500; color:var(--cf-dim); padding:3px 8px;
+  border-bottom:1px solid var(--cf-border); white-space:nowrap;}
+.cf-coupling-table td{padding:3px 8px; border-bottom:1px solid var(--cf-border);
+  font-variant-numeric:tabular-nums; color:var(--cf-text); white-space:nowrap;}
+.cf-coupling-table td.dim{color:var(--cf-dim);}
+.cf-coupling-level{font-size:10px; padding:0 7px; border-radius:9px; border:1px solid; white-space:nowrap;}
+.cf-coupling-level[data-level="low"]{color:#22c55e; border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.12);}
+.cf-coupling-level[data-level="medium"]{color:#eab308; border-color:rgba(234,179,8,.45); background:rgba(234,179,8,.12);}
+.cf-coupling-level[data-level="high"]{color:#ef4444; border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.14);}
+
+/* ---- 浅色主题覆盖（与 features-ui.css 同一模式：一律带属性前缀） ---- */
+html[data-cf-theme="light"] .cf-coupling-card{background:rgba(255,255,255,.97); box-shadow:0 6px 18px rgba(16,24,40,.10);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="low"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="low"]{color:#15803d; border-color:rgba(21,128,61,.4); background:rgba(34,197,94,.12);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="medium"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="medium"]{color:#a16207; border-color:rgba(161,98,7,.4); background:rgba(234,179,8,.12);}
+html[data-cf-theme="light"] .cf-coupling-badge[data-level="high"],
+html[data-cf-theme="light"] .cf-coupling-level[data-level="high"]{color:#b91c1c; border-color:rgba(185,28,28,.4); background:rgba(239,68,68,.12);}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="low"]{background:#15803d;}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="medium"]{background:#a16207;}
+html[data-cf-theme="light"] .cf-coupling-edge[data-level="high"]{background:#b91c1c;}
+html[data-cf-theme="light"] .cf-coupling-table td{border-bottom-color:#dee3ea;}
+
+/* ---- 拖拽导入：全屏遮罩 / 确认框行 / 进度条 ---- */
+.cf-drop-overlay{position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+  background:rgba(124,140,255,.10); border:2px dashed rgba(124,140,255,.55); border-radius:10px;
+  pointer-events:none; font-size:14px; font-weight:600; color:#b9c2ff; letter-spacing:.5px;}
+.cf-drop-row{display:flex; align-items:baseline; gap:8px; font-size:12px; margin-top:6px;}
+.cf-drop-row b{flex:0 0 auto; color:var(--cf-dim); font-weight:500; font-size:11.5px;}
+.cf-drop-row span{color:var(--cf-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
+.cf-drop-progress{height:5px; border-radius:3px; background:#2a2a38; overflow:hidden; margin-top:8px;}
+.cf-drop-progress>i{display:block; height:100%; width:0; background:var(--cf-accent); border-radius:3px;
+  transition:width .2s ease;}
+html[data-cf-theme="light"] .cf-drop-overlay{background:rgba(79,91,213,.06); border-color:rgba(79,91,213,.5); color:#3b46b8;}
+html[data-cf-theme="light"] .cf-drop-progress{background:#e2e8f0;}
 
 
 /* ---- v0.5.0：会话入口 / 节点活动行 / 执行监视器 / 执行过程 / 撤销 ---- */
@@ -599,7 +726,9 @@ var ICONS={
   'shapes':'<path d="M8.5 2.8 13 10H4z"/><rect x="3" y="13.5" width="9" height="8" rx="1.2"/><circle cx="17.5" cy="17.5" r="4.2"/>',
   'unlink':'<path d="M18.5 13.5a4 4 0 0 0 0-5.7l-2.6-2.6a4 4 0 0 0-5.7 0l-1.3 1.3"/><path d="M5.5 10.5a4 4 0 0 0 0 5.7l2.6 2.6a4 4 0 0 0 5.7 0l1.3-1.3"/><path d="M4 4l2.5 2.5M17.5 17.5 20 20"/>',
   'undo-2':'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
-  'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>'
+  'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
+  'activity':'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  'upload':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'
 };
 function refreshIcons(){
   var pending=ROOT.querySelectorAll('[data-lucide]');
@@ -888,20 +1017,25 @@ function renderNavPop(){
   navPop.items=items;
   if(navPop.active>=items.length)navPop.active=items.length>0?items.length-1:-1;
   if(!items.length){list.innerHTML='<div class="cf-navempty">没有匹配的节点</div>';return;}
-  list.innerHTML=items.map(function(it,i){
-    var st=(EDIT_BY_VIEW[CURVIEW]||{})[it.n.id];
-    var tag=st?(st.state==='editing'?'<span class="cf-edittag">修改中</span>':st.state==='error'?'<span class="cf-edittag err">修改失败</span>':'<span class="cf-edittag">已修改</span>'):'';
-    return '<div class="cf-navrow'+(i===navPop.active?' active':'')+'" role="option" data-id="'+esc(it.n.id)+'" aria-selected="'+(i===navPop.active?'true':'false')+'">'
-      +'<span class="cf-navdot" style="background:'+typeColor(typeOf(it.n).cat)+'"></span>'
-      +'<span class="cf-navrow-main"><span class="cf-navrow-title">'+esc(it.title)+'</span>'
-      +(it.sub?'<span class="cf-navrow-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</span>':'')+'</span>'
-      +tag+'</div>';
-  }).join('');
+  list.innerHTML=items.map(function(it,i){return navRowHtml(it,i===navPop.active);}).join('');
+  bindNavRowEvents(list);
+  scrollNavPopActive();
+}
+/* 单行结构（v1.1 抽取：features 分组渲染复用同一行结构与事件绑定） */
+function navRowHtml(it,active){
+  var st=(EDIT_BY_VIEW[CURVIEW]||{})[it.n.id];
+  var tag=st?(st.state==='editing'?'<span class="cf-edittag">修改中</span>':st.state==='error'?'<span class="cf-edittag err">修改失败</span>':'<span class="cf-edittag">已修改</span>'):'';
+  return '<div class="cf-navrow'+(active?' active':'')+'" role="option" data-id="'+esc(it.n.id)+'" aria-selected="'+(active?'true':'false')+'">'
+    +'<span class="cf-navdot" style="background:'+typeColor(typeOf(it.n).cat)+'"></span>'
+    +'<span class="cf-navrow-main"><span class="cf-navrow-title">'+esc(it.title)+'</span>'
+    +(it.sub?'<span class="cf-navrow-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</span>':'')+'</span>'
+    +tag+'</div>';
+}
+function bindNavRowEvents(list){
   Array.prototype.forEach.call(list.querySelectorAll('.cf-navrow'),function(row){
     row.addEventListener('click',function(){pickNavRow(row.dataset.id);});
     row.addEventListener('pointermove',function(){setNavActiveId(row.dataset.id);});
   });
-  scrollNavPopActive();
 }
 function scrollNavPopActive(){
   var list=$('cf-navlist');
@@ -1031,6 +1165,8 @@ function redrawLinks(){
     var w=Math.abs(a[0]-b[0])+2*LPAD,h=Math.abs(a[1]-b[1])+2*LPAD;
     var svg=document.createElementNS(NS,'svg');
     svg.setAttribute('class','cf-linksvg');
+    svg.setAttribute('data-from',l[0]);
+    svg.setAttribute('data-to',l[2]);
     svg.setAttribute('width',Math.max(1,Math.round(w)));
     svg.setAttribute('height',Math.max(1,Math.round(h)));
     svg.style.left=x+'px';svg.style.top=y+'px';
@@ -1464,6 +1600,7 @@ function openCanvasMenu(x,y){
   openMenu([
     {label:'新建项目…',icon:'file-plus-2',act:function(){openNewDialog();}},
     {label:'导入项目…',icon:'folder-open',act:function(){openImportDialog();}},
+    {label:'分析全部耦合',icon:'activity',act:function(){runCouplingAnalysis(null);}},
     {sep:true},
     {label:'添加节点',icon:'shapes',sub:addSub},
     {label:'整理布局',icon:'layout-list',act:autoLayout},
@@ -1498,6 +1635,8 @@ function openNodeMenu(id,x,y){
     {sep:true},
     {label:'删除节点',icon:'trash-2',danger:true,act:function(){sel={type:'node',id:id};deleteSel();}}
   ];
+  /* v1.2：文件级模块节点 → 单节点耦合分析（符号子节点不显示该菜单项） */
+  if(canAnalyzeCouplingNode(n)){items.splice(3,0,{label:'分析耦合',icon:'activity',act:function(){runCouplingAnalysis(id);}});}
   openMenu(items,x,y);
 }
 function openLinkMenu(idx,x,y){
@@ -1566,7 +1705,7 @@ function openNewDialog(){
 function openImportDialog(){
   openModal(dHead('folder-open','导入项目')
     +'<div class="cf-dbody">'
-    +'<div class="cf-hintbox">宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 300 个文件。</div>'
+    +'<div class="cf-hintbox">宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 1000 个文件。</div>'
     +fld('项目路径','<input class="cf-in" data-f="path" placeholder="绝对路径（如 /Users/you/project、~/project）或工作区相对路径（./server）；@ 选中的路径也可直接粘贴">')
     +'<div class="cf-row2">'
     +fld('递归深度',selHtml('depth',['2','4','6','10'],'4'))
@@ -2823,7 +2962,1323 @@ function renderSettingsDialog(cfg){
   });
 }
 
+/* ================= v1.1：功能分组（features.json） =================
+ * 数据来源：GET/POST /codeflow/api/features（宿主读 <项目>/features.json；
+ * 画布只走同源 HTTP，不读磁盘）。仅 think/build 两个分类启用分组：
+ *   - 组行点击 = spotlightNodes 整组高亮（不关浮层）；成员行点击沿用 pickNavRow
+ *     （关浮层 + focusNode，行为与改动前完全一致）；
+ *   - 组行右键 = 重命名 / 合并到… / 解散 / 重新识别（前三个 POST /api/features
+ *     后重拉，重新识别 = ?refresh=1）；
+ *   - 识别不出 → 列表顶部横幅 + 「让 agent 识别」（唯一的模型路径，仅显式点击；
+ *     请求中禁用防重复）。识别/拉取失败一律退化为扁平列表，绝不白屏。
+ * 折叠状态只存内存（navPop.collapsed Set），默认展开第一组；未分类组固定最后、
+ * 默认收起。搜索沿用 navPop.query，跨组过滤：组内 0 命中整组隐藏，组名命中保留。
+ * 所有动态字符串一律 esc()/textContent，禁止拼接未转义 HTML。 */
+var FEATURES={data:null,reqId:0,nodeTags:null,uncatIds:[]};
+var SPOT={active:false,ids:null,label:'',box:null};
+
+function featuresEnabledFor(cat){
+  return HOSTED&&(cat==='think'||cat==='build');
+}
+function featuresProjectName(){
+  return (G.project&&G.project.name)||null;
+}
+/* 打开浮层时拉取（每次打开都拉：轻量、且能吃到宿主刚写盘的结果） */
+function fetchFeatures(force){
+  var name=featuresProjectName();
+  if(!name)return Promise.resolve(null);
+  var rid=++FEATURES.reqId;
+  return fetchT('/codeflow/api/features?project='+encodeURIComponent(name)+'&view='+CURVIEW+(force?'&refresh=1':''),{headers:{'accept':'application/json'},cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(p){
+      if(rid===FEATURES.reqId){
+        FEATURES.data=(p&&p.ok)?p:null;
+        buildNodeTags();
+      }
+      return FEATURES.data;
+    })
+    .catch(function(){
+      if(rid===FEATURES.reqId){FEATURES.data=null;buildNodeTags();}
+      return null;
+    });
+}
+function buildNodeTags(){
+  var tags=null;
+  var data=FEATURES.data;
+  if(data&&Array.isArray(data.features)){
+    tags={};
+    data.features.forEach(function(f){
+      (f.nodes||[]).forEach(function(id){
+        if(!tags[id])tags[id]=[];
+        if(tags[id].indexOf(f.name)<0)tags[id].push(f.name);
+      });
+    });
+  }
+  FEATURES.nodeTags=tags;
+}
+/* 写操作 → POST /api/features → 重拉 + 刷新浮层/详情/高亮 */
+function featureOpRequest(op,body,okMsg){
+  var name=featuresProjectName();
+  if(!name)return;
+  apiPost('features',Object.assign({op:op,project:name,view:CURVIEW},body)).then(function(res){
+    if(res&&res.ok){
+      if(okMsg)toast(okMsg,'ok');
+      if(SPOT.active)clearSpotlight();
+      refreshFeatures(false);
+      return;
+    }
+    toast((res&&res.error)||'操作失败','err');
+  }).catch(function(err){
+    toast('操作失败：'+((err&&err.message)||err),'err');
+  });
+}
+function refreshFeatures(force){
+  var name=featuresProjectName();
+  if(!name)return Promise.resolve(null);
+  return fetchFeatures(force===true).then(function(){
+    if(navPop.open&&featuresEnabledFor(navPop.cat)){renderNavPop();positionNavPop();}
+    if(force===true&&SPOT.active)clearSpotlight();
+    if(detailsNodeId!==null&&!$('cf-modal').hidden)openDetails(detailsNodeId);
+    return FEATURES.data;
+  });
+}
+
+/* ---- 浮层：打开时重置分组状态，数据到达后按需重渲染 ---- */
+var openNavPopFeaturesBase=openNavPop;
+openNavPop=function(cat,anchorBtn){
+  FEATURES.data=null;
+  FEATURES.nodeTags=null;
+  FEATURES.uncatIds=[];
+  navPop.collapsed=new Set();
+  navPop.uncategorizedOpen=false;
+  navPop.grouped=false;
+  openNavPopFeaturesBase(cat,anchorBtn);
+  if(featuresEnabledFor(cat)&&featuresProjectName()){
+    fetchFeatures(false).then(function(){
+      if(navPop.open&&navPop.cat===cat){renderNavPop();positionNavPop();}
+    });
+  }
+};
+/* 渲染分派：非 think/build 走原实现；think/build 由 features 渲染器接管 */
+var renderNavPopFeaturesBase=renderNavPop;
+renderNavPop=function(){
+  if(!navPop.open)return;
+  if(!featuresEnabledFor(navPop.cat)){navPop.grouped=false;renderNavPopFeaturesBase();return;}
+  renderFeaturesNavPop();
+};
+var setNavActiveIdFeaturesBase=setNavActiveId;
+setNavActiveId=function(id){
+  if(!navPop.grouped){setNavActiveIdFeaturesBase(id);return;}
+  var list=$('cf-navlist');
+  navPop.active=-1;
+  navPop.items.forEach(function(it,i){if(it.n.id===id)navPop.active=i;});
+  Array.prototype.forEach.call(list.querySelectorAll('[data-id]'),function(row){
+    var on=row.getAttribute('data-id')===id;
+    row.classList.toggle('active',on);
+    if(row.classList.contains('cf-navrow'))row.setAttribute('aria-selected',on?'true':'false');
+  });
+  scrollNavPopActive();
+};
+var scrollNavPopActiveFeaturesBase=scrollNavPopActive;
+scrollNavPopActive=function(){
+  var list=$('cf-navlist');
+  var active=list.querySelector('.active');
+  if(active&&active.scrollIntoView)try{active.scrollIntoView({block:'nearest'});}catch(e){}
+};
+var pickNavRowFeaturesBase=pickNavRow;
+pickNavRow=function(id){
+  if(typeof id==='string'&&id.indexOf('@group:')===0){
+    spotlightGroup(id.slice('@group:'.length));
+    return;
+  }
+  pickNavRowFeaturesBase(id);
+};
+
+/* ---- 分组渲染 ---- */
+/* 与 navPopItems 同一套命中逻辑（标题/次级说明），但不过滤、不排序，
+   供分组模式做「组内命中 + 组名命中」判断 */
+function featureItemsOf(){
+  var q=navPop.query.trim().toLowerCase();
+  return navPopSource().map(function(n){
+    var t=typeOf(n);
+    var sub='';
+    if(n.type==='module'&&n.params&&n.params.path){
+      var segs=String(n.params.path).split('\\').join('/').split('/');
+      sub=segs.slice(Math.max(0,segs.length-3)).join('/');
+    }else{
+      var st=STC[n.status]||STC.pending;
+      sub=st[0]+(n.result?(' · '+n.result):'');
+    }
+    var title=String(n.title||t.label);
+    var hitTitle=!q||title.toLowerCase().indexOf(q)>=0;
+    var hitPath=!q||!sub?hitTitle:(sub.toLowerCase().indexOf(q)>=0);
+    return {n:n,title:title,sub:sub,hitTitle:hitTitle,hitPath:hitPath,hit:hitTitle||hitPath};
+  });
+}
+function renderFeaturesNavPop(){
+  var list=$('cf-navlist');
+  var data=FEATURES.data;
+  if(!data){navPop.grouped=false;renderNavPopFeaturesBase();return;}
+  var feats=Array.isArray(data.features)?data.features:[];
+  if(feats.length===0){
+    navPop.grouped=false;
+    renderFlatWithBanner(list);
+    return;
+  }
+  renderGrouped(list,feats);
+}
+/* 识别不出（features: []）：横幅 + 原扁平列表 */
+function renderFlatWithBanner(list){
+  var items=navPopItems();
+  navPop.items=items;
+  if(navPop.active>=items.length)navPop.active=items.length>0?items.length-1:-1;
+  list.innerHTML='';
+  var banner=featuresBannerEl();
+  if(banner)list.appendChild(banner);
+  if(!items.length){
+    if(!banner)list.innerHTML='<div class="cf-navempty">没有匹配的节点</div>';
+    scrollNavPopActive();
+    return;
+  }
+  list.insertAdjacentHTML('beforeend',items.map(function(it,i){return navRowHtml(it,i===navPop.active);}).join(''));
+  bindNavRowEvents(list);
+  scrollNavPopActive();
+}
+function featuresBannerEl(){
+  if(!HOSTED)return null;
+  var data=FEATURES.data;
+  if(!data||!Array.isArray(data.features)||data.features.length>0)return null;
+  var wrap=document.createElement('div');
+  wrap.className='cf-fempty';
+  var text=document.createElement('span');
+  text.textContent='未识别到功能，可让 agent 识别一次';
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.className='cf-btn mini cf-fempty-btn';
+  btn.textContent='让 agent 识别';
+  btn.addEventListener('click',function(){
+    if(btn.disabled)return;
+    var name=featuresProjectName();
+    if(!name)return;
+    btn.disabled=true;
+    btn.textContent='请求中…';
+    apiPost('features/agent',{project:name,view:CURVIEW}).then(function(res){
+      if(res&&res.ok)toast('已请求识别，结果会出现在画布会话','ok');
+      else toast((res&&res.error)||'请求失败','err');
+    }).catch(function(err){
+      toast('请求失败：'+((err&&err.message)||err),'err');
+    }).then(function(){
+      btn.disabled=false;
+      btn.textContent='让 agent 识别';
+    });
+  });
+  wrap.appendChild(text);
+  wrap.appendChild(btn);
+  return wrap;
+}
+function groupRowHtml(name,count,expanded,hint,low){
+  return '<div class="cf-fgroup" role="option" data-id="'+esc('@group:'+name)+'" aria-selected="false" aria-expanded="'+(expanded?'true':'false')+'">'
+    +'<span class="cf-farrow" data-farrow="1" role="button" aria-label="'+esc((expanded?'收起 ':'展开 ')+name)+'">'+(expanded?'▾':'▸')+'</span>'
+    +'<span class="cf-navdot" style="background:'+typeColor(navPop.cat)+'"></span>'
+    +'<span class="cf-fgroup-name">'+esc(name)+'</span>'
+    +'<span class="cf-fgroup-count">· '+count+'</span>'
+    +(low?'<span class="cf-fgroup-low">低置信</span>':'')
+    +(hint||'')+'</div>';
+}
+function featureMemberRowHtml(it,active){
+  var html=navRowHtml(it,active);
+  var names=(FEATURES.nodeTags||{})[it.n.id];
+  if(names&&names.length){
+    var shown=names.slice(0,2);
+    var label=shown.join('/')+(names.length>2?('+'+(names.length-2)):'');
+    html=html.replace(/<\/div>$/,'<span class="cf-ftag" title="'+esc(names.join('、'))+'">'+esc(label)+'</span></div>');
+  }
+  return html;
+}
+function renderGrouped(list,feats){
+  var q=navPop.query.trim().toLowerCase();
+  var all=featureItemsOf();
+  var byIdMap={};
+  all.forEach(function(it){byIdMap[it.n.id]=it;});
+  var claimed={};
+  var groups=[];
+  feats.forEach(function(f){
+    var nodesAll=(f.nodes||[]).filter(function(id){return byIdMap[id];}).map(function(id){return byIdMap[id];});
+    nodesAll.forEach(function(it){claimed[it.n.id]=1;});
+    var members=q?(f.name&&String(f.name).toLowerCase().indexOf(q)>=0?nodesAll:nodesAll.filter(function(it){return it.hit;})):nodesAll;
+    groups.push({f:f,membersAll:nodesAll,members:members,nameHit:!!(q&&String(f.name).toLowerCase().indexOf(q)>=0)});
+  });
+  /* 组过滤：有命中成员、组名命中、或（任务视图零命中且模块图有货 → 切换提示） */
+  var viewGroups=groups.filter(function(g){
+    if(g.members.length>0)return true;
+    if(g.nameHit)return true;
+    if(!q&&CURVIEW==='tasks'&&(g.f.count===0)&&(g.f.modulesCount||0)>0)return true;
+    return false;
+  });
+  var rest=all.filter(function(it){return !claimed[it.n.id]&&it.hit;});
+  var rows=[];
+  var html='';
+  viewGroups.forEach(function(g){
+    var expanded=!navPop.collapsed.has(g.f.name);
+    var hint=(CURVIEW==='tasks'&&g.membersAll.length===0&&(g.f.modulesCount||0)>0)
+      ?'<span class="cf-fgroup-hint">在模块结构图有 '+g.f.modulesCount+' 个模块 · 切换视图</span>':'';
+    html+=groupRowHtml(g.f.name,g.membersAll.length,expanded,hint,g.f.low===true);
+    /* 组行也要有 .n.id 形状：基础键盘导航（↑/↓/Enter）按 items[i].n.id 寻址 */
+    rows.push({kind:'group',id:'@group:'+g.f.name,n:{id:'@group:'+g.f.name},name:g.f.name});
+    if(expanded)g.members.forEach(function(it){
+      html+=featureMemberRowHtml(it,rows.length===navPop.active);
+      rows.push({kind:'node',it:it});
+    });
+  });
+  /* 未分类组：固定最后，默认收起 */
+  if(rest.length>0){
+    var restExpanded=navPop.uncategorizedOpen===true;
+    html+=groupRowHtml('未分类',rest.length,restExpanded,'',false);
+    rows.push({kind:'group',id:'@group:未分类',n:{id:'@group:未分类'},name:'未分类',uncategorized:true});
+    if(restExpanded)rest.forEach(function(it){
+      html+=featureMemberRowHtml(it,rows.length===navPop.active);
+      rows.push({kind:'node',it:it});
+    });
+  }
+  FEATURES.uncatIds=rest.map(function(it){return it.n.id;});
+  navPop.grouped=true;
+  if(rows.length===0){
+    list.innerHTML='<div class="cf-navempty">没有匹配的节点</div>';
+    navPop.items=[];
+    return;
+  }
+  navPop.items=rows;
+  if(navPop.active<0||navPop.active>=rows.length)navPop.active=0;
+  list.innerHTML=html;
+  var activeId=navPop.items[navPop.active]?navPop.items[navPop.active].id:null;
+  Array.prototype.forEach.call(list.querySelectorAll('[data-id]'),function(row){
+    var on=row.getAttribute('data-id')===activeId;
+    row.classList.toggle('active',on);
+    if(row.classList.contains('cf-navrow'))row.setAttribute('aria-selected',on?'true':'false');
+  });
+  bindFeatureRowEvents(list);
+  scrollNavPopActive();
+}
+function bindFeatureRowEvents(list){
+  Array.prototype.forEach.call(list.querySelectorAll('.cf-fgroup'),function(row){
+    var name=row.getAttribute('data-id').slice('@group:'.length);
+    row.addEventListener('click',function(e){
+      if(e.target&&e.target.closest&&e.target.closest('.cf-farrow'))return;
+      spotlightGroup(name);
+    });
+    var arrow=row.querySelector('.cf-farrow');
+    if(arrow)arrow.addEventListener('click',function(e){
+      e.stopPropagation();
+      if(name==='未分类')navPop.uncategorizedOpen=!(navPop.uncategorizedOpen===true);
+      else if(navPop.collapsed.has(name))navPop.collapsed.delete(name);
+      else navPop.collapsed.add(name);
+      renderNavPop();
+      positionNavPop();
+    });
+    row.addEventListener('pointermove',function(){setNavActiveId(row.getAttribute('data-id'));});
+    row.addEventListener('contextmenu',function(e){
+      e.preventDefault();e.stopPropagation();
+      var rr=ROOT.getBoundingClientRect();
+      openGroupMenu(name,e.clientX-rr.left,e.clientY-rr.top);
+    });
+  });
+  Array.prototype.forEach.call(list.querySelectorAll('.cf-navrow'),function(row){
+    row.addEventListener('click',function(){pickNavRow(row.dataset.id);});
+    row.addEventListener('pointermove',function(){setNavActiveId(row.dataset.id);});
+  });
+}
+/* 组行右键：重命名 / 合并到…（子菜单列其它功能）/ 解散 / 重新识别 */
+function openGroupMenu(name,x,y){
+  if(name==='未分类'){
+    openMenu([{label:'重新识别',icon:'rotate-cw',act:function(){toast('正在重新识别…');refreshFeatures(true);}}],x,y);
+    return;
+  }
+  var others=[];
+  var data=FEATURES.data;
+  if(data&&Array.isArray(data.features)){
+    data.features.forEach(function(f){
+      if(f.name!==name)others.push({label:f.name,icon:'copy',act:function(){
+        featureOpRequest('merge',{from:name,to:f.name},'已把「'+name+'」合并到「'+f.name+'」');
+      }});
+    });
+  }
+  var items=[
+    {label:'重命名…',icon:'pencil',act:function(){
+      openPrompt('重命名功能','功能名称',name,function(v){
+        if(v&&v!==name)featureOpRequest('rename',{from:name,to:v},'已重命名为「'+v+'」');
+      });
+    }},
+  ];
+  if(others.length>0)items.push({label:'合并到…',icon:'copy',sub:others});
+  else items.push({label:'合并到…（没有其它功能）',icon:'copy',act:function(){toast('没有其它功能可合并');}});
+  items.push({label:'解散',icon:'trash-2',danger:true,act:function(){
+    featureOpRequest('dissolve',{feature:name},'已解散「'+name+'」');
+  }});
+  items.push({sep:true});
+  items.push({label:'重新识别',icon:'rotate-cw',act:function(){toast('正在重新识别…');refreshFeatures(true);}});
+  openMenu(items,x,y);
+}
+
+/* ---- 整组高亮（spotlight）：不动 focusNode 的 1.8s 逻辑（不同 class、不同状态） ---- */
+function spotBBox(){
+  var minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9,any=false;
+  G.nodes.forEach(function(n){
+    if(!SPOT.ids||!SPOT.ids[n.id])return;
+    var el=nodeEls[n.id];
+    var w=el?el.offsetWidth:(typeOf(n).w||240),h=el?el.offsetHeight:130;
+    minx=Math.min(minx,n.pos[0]);miny=Math.min(miny,n.pos[1]);
+    maxx=Math.max(maxx,n.pos[0]+w);maxy=Math.max(maxy,n.pos[1]+h);
+    any=true;
+  });
+  return any?{minx:minx,miny:miny,maxx:maxx,maxy:maxy}:null;
+}
+function applySpotClasses(){
+  if(!SPOT.active)return;
+  G.nodes.forEach(function(n){
+    var el=nodeEls[n.id];
+    if(el)el.classList.toggle('cf-spot',!!SPOT.ids[n.id]);
+  });
+}
+function applySpotLinkClasses(){
+  Array.prototype.forEach.call($('cf-links').querySelectorAll('.cf-linksvg'),function(svg){
+    var on=SPOT.active&&SPOT.ids&&SPOT.ids[svg.getAttribute('data-from')]&&SPOT.ids[svg.getAttribute('data-to')];
+    var vis=svg.querySelector('.cf-link');
+    if(vis)vis.classList.toggle('cf-spot-link',!!on);
+  });
+}
+function ensureSpotBox(){
+  if(SPOT.box&&SPOT.box.isConnected)return SPOT.box;
+  var box=document.createElement('div');
+  box.className='cf-spotbox';
+  var label=document.createElement('span');
+  label.className='cf-spotbox-label';
+  box.appendChild(label);
+  $('cf-stage').appendChild(box);
+  SPOT.box=box;
+  return box;
+}
+function removeSpotBox(){
+  if(SPOT.box&&SPOT.box.parentNode)SPOT.box.parentNode.removeChild(SPOT.box);
+  SPOT.box=null;
+}
+/* 虚线框挂在 stage 上，坐标=节点包围盒+padding 换算到屏幕；随 pan/zoom 重算 */
+function layoutSpotBox(){
+  if(!SPOT.active){removeSpotBox();return;}
+  var box=spotBBox();
+  if(!box){removeSpotBox();return;}
+  var pad=80;
+  var sx=view.x+(box.minx-pad)*view.k;
+  var sy=view.y+(box.miny-pad)*view.k;
+  var sw=((box.maxx-box.minx)+pad*2)*view.k;
+  var sh=((box.maxy-box.miny)+pad*2)*view.k;
+  var el=ensureSpotBox();
+  el.style.left=sx+'px';
+  el.style.top=sy+'px';
+  el.style.width=Math.max(24,sw)+'px';
+  el.style.height=Math.max(24,sh)+'px';
+  var label=el.querySelector('.cf-spotbox-label');
+  if(label)label.textContent=SPOT.label;
+}
+function spotlightNodes(ids,label){
+  clearSpotlight();
+  var set={};
+  (ids||[]).forEach(function(id){set[id]=1;});
+  SPOT.active=true;
+  SPOT.ids=set;
+  SPOT.label=String(label||'');
+  ROOT.classList.add('cf-spotlight');
+  applySpotClasses();
+  var box=spotBBox();
+  if(box){
+    /* 缩放到包围盒：padding 80，k clamp [0.4, 1.2]，复用 animateView */
+    var pad=80;
+    var bw=Math.max(60,(box.maxx-box.minx)+pad*2),bh=Math.max(60,(box.maxy-box.miny)+pad*2);
+    var cx=(box.minx+box.maxx)/2,cy=(box.miny+box.maxy)/2;
+    var r=stageRect();
+    var k=Math.max(0.4,Math.min(1.2,Math.min((r.width-40)/bw,(r.height-40)/bh)));
+    animateView(r.width/2-cx*k,r.height/2-cy*k,k,340);
+  }
+  layoutSpotBox();
+}
+function clearSpotlight(){
+  if(!SPOT.active)return;
+  SPOT.active=false;
+  SPOT.ids=null;
+  SPOT.label='';
+  ROOT.classList.remove('cf-spotlight');
+  G.nodes.forEach(function(n){
+    var el=nodeEls[n.id];
+    if(el)el.classList.remove('cf-spot');
+  });
+  Array.prototype.forEach.call($('cf-links').querySelectorAll('.cf-linksvg'),function(svg){
+    var vis=svg.querySelector('.cf-link');
+    if(vis)vis.classList.remove('cf-spot-link');
+  });
+  removeSpotBox();
+}
+/* 组点击 → 整组高亮；任务视图零命中且模块图有货 → 切换后自动高亮 */
+function spotlightGroup(name){
+  if(name==='未分类'){
+    var uncat=(FEATURES.uncatIds||[]).filter(function(id){return byId(id);});
+    if(uncat.length>0)spotlightNodes(uncat,name);
+    else toast('未分类组没有可高亮的节点');
+    return;
+  }
+  var data=FEATURES.data;
+  if(!data)return;
+  var f=null;
+  (data.features||[]).forEach(function(entry){if(entry.name===name)f=entry;});
+  if(!f)return;
+  var ids=(f.nodes||[]).filter(function(id){return byId(id);});
+  if(ids.length===0&&CURVIEW==='tasks'&&(f.modulesCount||0)>0){switchAndSpot(name);return;}
+  if(ids.length===0){toast('「'+name+'」在当前视图没有可高亮的节点');return;}
+  spotlightNodes(ids,name);
+}
+function switchAndSpot(name){
+  if(!HOSTED)return;
+  toast('「'+name+'」在任务视图未命中：正在切换到模块结构图…');
+  var after=function(){
+    fetchFeatures(false).then(function(){
+      var data=FEATURES.data;
+      if(!data)return;
+      var f=null;
+      (data.features||[]).forEach(function(entry){if(entry.name===name)f=entry;});
+      if(!f)return;
+      var ids=(f.nodes||[]).filter(function(id){return byId(id);});
+      if(ids.length>0)spotlightNodes(ids,name);
+    });
+  };
+  try{
+    var p=doSwitchView('modules');
+    if(p&&typeof p.then==='function')p.then(after,after);
+    else after();
+  }catch(e){after();}
+}
+/* 清除时机：Esc / 画布空白按下 / 切换视图 / 删除节点 / 重新分组（重新点击即替换） */
+window.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&SPOT.active)clearSpotlight();
+});
+stage.addEventListener('pointerdown',function(e){
+  if(!SPOT.active||e.button===2)return;
+  var t=e.target;
+  if(t&&t.closest){
+    if(t.closest('.cf-node')||t.closest('.cf-link-hit')||t.closest('.cf-mini')||t.closest('.cf-zoomer')
+      ||t.closest('.cf-menu')||t.closest('.cf-modal')||t.closest('.cf-banner')||t.closest('.cf-navpop')
+      ||t.closest('.cf-nav')||t.closest('.cf-monitor')||t.closest('.cf-spotbox'))return;
+  }
+  clearSpotlight();
+},true);
+var switchViewFeaturesBase=switchView;
+switchView=function(next){
+  if(SPOT.active)clearSpotlight();
+  return switchViewFeaturesBase(next);
+};
+var deleteSelFeaturesBase=deleteSel;
+deleteSel=function(){
+  var had=SPOT.active;
+  var result=deleteSelFeaturesBase();
+  if(had)clearSpotlight();
+  return result;
+};
+/* 重渲染后恢复高亮 class / 虚线框（renderNodes/redrawLinks/applyView 链式包装） */
+var renderNodesFeaturesBase=renderNodes;
+renderNodes=function(){
+  renderNodesFeaturesBase();
+  applySpotClasses();
+};
+var redrawLinksFeaturesBase=redrawLinks;
+redrawLinks=function(){
+  redrawLinksFeaturesBase();
+  applySpotLinkClasses();
+  layoutSpotBox();
+};
+var applyViewFeaturesBase=applyView;
+applyView=function(){
+  applyViewFeaturesBase();
+  layoutSpotBox();
+};
+
+/* ---- 详情弹窗：功能归属 chips（可增删，改动即 POST /api/features {op:'label'}） ---- */
+var openDetailsFeaturesBase=openDetails;
+openDetails=function(id){
+  openDetailsFeaturesBase(id);
+  if(!HOSTED)return;
+  var n=byId(id);
+  if(!n||!featuresProjectName())return;
+  fetchFeatures(false).then(function(){
+    if($('cf-modal').hidden||detailsNodeId!==id)return;
+    injectFeatureChips(id);
+  });
+};
+function injectFeatureChips(id){
+  var d=$('cf-dialog');
+  if(!d)return;
+  var dbody=d.querySelector('.cf-dbody');
+  if(!dbody)return;
+  var old=dbody.querySelector('[data-frole="feature-row"]');
+  if(old&&old.parentNode)old.parentNode.removeChild(old);
+  var names=[];
+  var data=FEATURES.data;
+  if(data&&Array.isArray(data.features)){
+    data.features.forEach(function(f){
+      if((f.nodes||[]).indexOf(id)>=0)names.push(f.name);
+    });
+  }
+  var row=document.createElement('div');
+  row.className='cf-kv';
+  row.setAttribute('data-frole','feature-row');
+  var b=document.createElement('b');
+  b.textContent='功能归属';
+  row.appendChild(b);
+  var span=document.createElement('span');
+  var chips=document.createElement('div');
+  chips.className='cf-fchips';
+  names.slice(0,6).forEach(function(name){
+    var chip=document.createElement('span');
+    chip.className='cf-fchip';
+    var label=document.createElement('span');
+    label.textContent=name;
+    var x=document.createElement('button');
+    x.type='button';
+    x.className='cf-fchip-x';
+    x.textContent='×';
+    x.setAttribute('aria-label','移除 '+name);
+    x.addEventListener('click',function(){
+      featureOpRequest('label',{nodeId:id,feature:name,remove:true},'已移除「'+name+'」归属');
+    });
+    chip.appendChild(label);
+    chip.appendChild(x);
+    chips.appendChild(chip);
+  });
+  var add=document.createElement('button');
+  add.type='button';
+  add.className='cf-fchip-add';
+  add.textContent='+';
+  add.setAttribute('aria-label','添加功能归属');
+  add.addEventListener('click',function(){
+    openPrompt('添加功能归属','功能名称','',function(v){
+      featureOpRequest('label',{nodeId:id,feature:v},'已添加「'+v+'」归属');
+    });
+  });
+  chips.appendChild(add);
+  span.appendChild(chips);
+  row.appendChild(span);
+  var firstSec=dbody.querySelector('.cf-sec');
+  if(firstSec)dbody.insertBefore(row,firstSec);
+  else dbody.appendChild(row);
+}
+/* ================= v1.2：模块耦合分析（屎山程度） =================
+ * 全部走宿主 HTTP（POST/GET /codeflow/api/coupling），零 agent、零 token。
+ *   - 节点徽章：文件级 module 节点头部状态徽章左侧的小胶囊 + 右缘 3px 色条；
+ *   - 左上角卡片：整体「屎山程度 · 低|中|高」+ 统计行 + 部分/过期角标；
+ *   - 入口：节点右键「分析耦合」/ 空白右键「分析全部耦合」/ 工具栏按钮；
+ *   - 任务视图：只显示卡片（meta.coupling 镜像）并标注「来自模块结构图」，
+ *     绝不给任务节点打标签；
+ *   - 过期：GET /api/coupling 的 stale 只做渲染叠加（灰化/虚线），不写图。
+ * 所有动态文本一律 esc()/textContent，禁止拼接未转义 HTML。 */
+var COUPLING={stale:null,staleKey:'',staleProject:'',running:false,card:null};
+
+function couplingLevelText(level){return level==='high'?'高':level==='medium'?'中':'低';}
+function couplingLevelColor(level){return level==='high'?'#ef4444':level==='medium'?'#eab308':'#22c55e';}
+/* 与宿主 lib/coupling.js 的 isFileModuleNode 同一判定：type=module 且 symbol 为空 */
+function canAnalyzeCouplingNode(n){
+  return !!(n&&n.type==='module'&&n.params&&typeof n.params.path==='string'&&n.params.path.length>0
+    &&(n.params.symbol===undefined||n.params.symbol===null||n.params.symbol===''));
+}
+function couplingProjectName(){return (G.project&&G.project.name)||null;}
+function modulesAvailable(){
+  return !!(HOSTED&&VIEWMETA&&VIEWMETA.modules&&VIEWMETA.modules.available);
+}
+function couplingMetaOf(){var m=G.meta&&G.meta.coupling;return (m&&m.overall)?m:null;}
+
+/* ---- 强制刷新：宿主刚写完图、rev 与本地相同，常规采纳会被 rev 门槛挡住。
+   仅在同步代码里短暂下调 syncRev（不落任何异步间隙），绝不手动改 G 绕过 rev。 */
+var adoptServerStateCouplingBase=adoptServerState;
+adoptServerState=function(payload,force){
+  if(force===true&&payload&&typeof payload.rev==='number'&&payload.view===CURVIEW){
+    var saved=syncRev;
+    syncRev=payload.rev-1;
+    var changed=false;
+    try{changed=adoptServerStateCouplingBase(payload);}finally{if(!changed)syncRev=saved;}
+    if(changed)refreshCouplingStale(false);
+    return changed;
+  }
+  return adoptServerStateCouplingBase(payload);
+};
+var refreshLatestSoonCouplingBase=refreshLatestSoon;
+refreshLatestSoon=function(force){
+  if(force!==true){refreshLatestSoonCouplingBase();return;}
+  var name=couplingProjectName();
+  if(!name)return;
+  var q='?project='+encodeURIComponent(name)+'&view='+CURVIEW;
+  fetchT('/codeflow/api/state'+q,{headers:{'accept':'application/json'},cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(p){if(p)adoptServerState(p,true);})
+    .catch(function(){});
+};
+
+/* ---- 分析入口（节点右键 / 空白右键 / 工具栏共用） ----
+   入队写队列与 pending autosave 串行（避免旧图覆盖耦合结果），但**不走
+   queueWrite 的 syncRev 更新**：coupling 响应的 rev 属于 modules 视图，任务
+   视图下点击若照抄会让下一次任务图 autosave 携带错误 expectedRev 撞 409。
+   正确的 syncRev 由随后的 refreshLatestSoon(true) 按当前视图的拉取结果回填。 */
+function queueWriteNoRev(kind,buildBody){
+  var run=writeChain.then(function(){return apiPost(kind,buildBody());});
+  writeChain=run.then(function(){},function(){});
+  return run;
+}
+function runCouplingAnalysis(nodeId){
+  if(!HOSTED){toast('耦合分析需要宿主环境','err');return;}
+  var name=couplingProjectName();
+  if(!name){toast('先打开一个项目','err');return;}
+  if(!modulesAvailable()){toast('当前项目没有模块结构图，请先导入项目','err');return;}
+  if(COUPLING.running){toast('耦合分析正在进行中，请稍候…');return;}
+  COUPLING.running=true;
+  updateCouplingButton();
+  toast(nodeId?('正在分析「'+(((byId(nodeId)||{}).title)||nodeId)+'」的耦合…'):'正在分析全部模块的耦合…');
+  queueWriteNoRev('coupling',function(){return {project:name,nodeId:nodeId||null};})
+    .then(function(res){
+      COUPLING.running=false;
+      updateCouplingButton();
+      refreshLatestSoon(true);
+      fetchCouplingStale(true);
+      renderCouplingCard();
+      if(res&&res.warning)toast(res.warning,'err');
+      if(res&&res.overall)toast('耦合分析完成：屎山程度 '+couplingLevelText(res.overall.level)+'（'+((res.durationMs==null)?'<1':res.durationMs)+'ms）','ok');
+    })
+    .catch(function(err){
+      COUPLING.running=false;
+      updateCouplingButton();
+      if(err&&err.status===409)syncConflict(err);
+      else toast('耦合分析失败：'+((err&&err.message)||err),'err');
+    });
+}
+
+/* ---- 过期信息（GET /api/coupling：mtime 探测在宿主侧，10s 缓存） ---- */
+function refreshCouplingStale(force){
+  if(!HOSTED)return;
+  var name=couplingProjectName();
+  if(!name)return;
+  var meta=couplingMetaOf();
+  var key=(meta&&meta.at)?String(meta.at):'';
+  if(force!==true&&COUPLING.stale&&COUPLING.staleKey===key&&COUPLING.staleProject===name)return;
+  apiGet('/codeflow/api/coupling?project='+encodeURIComponent(name)+'&view=modules')
+    .then(function(p){
+      if(!p||p.ok===false)return;
+      COUPLING.stale=p.stale||{overall:false,nodes:{}};
+      COUPLING.staleKey=key;
+      COUPLING.staleProject=name;
+      renderCouplingCard();
+      applyCouplingMarks();
+    })
+    .catch(function(){});
+}
+
+/* ---- 节点徽章 + 右缘色条（只增删 class/子元素，不为高亮整图重渲染） ---- */
+function applyCouplingMarks(){
+  var meta=couplingMetaOf();
+  var stale=(COUPLING.stale&&COUPLING.stale.nodes)||{};
+  for(var i=0;i<G.nodes.length;i++){
+    var n=G.nodes[i];
+    var el=nodeEls[n.id];
+    if(!el)continue;
+    var edge=el.querySelector('.cf-coupling-edge');
+    var head=el.querySelector('.cf-node-head');
+    var badge=head?head.querySelector('.cf-coupling-badge'):null;
+    var usable=CURVIEW==='modules'&&canAnalyzeCouplingNode(n)&&n.coupling&&n.coupling.level;
+    if(!usable){
+      if(edge&&edge.parentNode)edge.parentNode.removeChild(edge);
+      if(badge&&badge.parentNode)badge.parentNode.removeChild(badge);
+      el.classList.remove('cf-coupling-stale');
+      continue;
+    }
+    var level=n.coupling.level==='high'?'high':n.coupling.level==='medium'?'medium':'low';
+    var isStale=stale[n.id]===true;
+    el.classList.toggle('cf-coupling-stale',isStale);
+    if(!edge){
+      edge=document.createElement('div');
+      edge.className='cf-coupling-edge';
+      el.appendChild(edge);
+    }
+    edge.setAttribute('data-level',level);
+    edge.classList.toggle('stale',isStale);
+    if(head&&!badge){
+      badge=document.createElement('span');
+      badge.className='cf-coupling-badge';
+      var statusBadge=head.querySelector('.cf-badge');
+      if(statusBadge)head.insertBefore(badge,statusBadge);
+      else head.appendChild(badge);
+    }
+    if(badge){
+      badge.setAttribute('data-level',level);
+      badge.classList.toggle('stale',isStale);
+      badge.textContent='耦合 · '+couplingLevelText(level);
+    }
+  }
+}
+
+/* ---- 左上角卡片 ---- */
+function ensureCouplingCard(){
+  if(COUPLING.card&&COUPLING.card.isConnected)return COUPLING.card;
+  var card=document.createElement('div');
+  card.className='cf-coupling-card';
+  card.id='cf-coupling-card';
+  card.hidden=true;
+  card.innerHTML='<div class="cf-coupling-line1"><span class="cf-coupling-dot"></span>'
+    +'<span class="cf-coupling-title"></span><span class="cf-coupling-extra"></span></div>'
+    +'<div class="cf-coupling-line2"></div>';
+  card.addEventListener('click',openCouplingDetails);
+  $('cf-stage').appendChild(card);
+  COUPLING.card=card;
+  return card;
+}
+function renderCouplingCard(){
+  var card=ensureCouplingCard();
+  var meta=couplingMetaOf();
+  var btn=$('cf-tb-coupling');
+  if(!meta){
+    card.hidden=true;
+    if(btn)btn.disabled=COUPLING.running||!modulesAvailable();
+    return;
+  }
+  var overall=meta.overall;
+  var level=overall.level==='high'?'high':overall.level==='medium'?'medium':'low';
+  var staleOverall=COUPLING.stale&&COUPLING.stale.overall===true;
+  card.hidden=false;
+  card.classList.toggle('stale',staleOverall===true);
+  card.querySelector('.cf-coupling-dot').style.background=couplingLevelColor(level);
+  card.querySelector('.cf-coupling-title').textContent='屎山程度 · '+couplingLevelText(level);
+  var extras=[];
+  if(staleOverall===true)extras.push('可能过期');
+  if(overall.partial===true)extras.push('已分析 '+overall.analyzed+'/'+overall.modules);
+  card.querySelector('.cf-coupling-extra').textContent=extras.length>0?('· '+extras.join(' · ')):'';
+  var parts=['模块 '+overall.modules,'环 '+overall.cycles];
+  /* 平均分只在模块视图能逐节点取到；任务视图显示「来自模块结构图」 */
+  var restricted=0,analyzedNodes=0;
+  if(CURVIEW==='modules'){
+    var sum=0,count=0;
+    for(var i=0;i<G.nodes.length;i++){
+      var n=G.nodes[i];
+      if(!canAnalyzeCouplingNode(n)||!n.coupling)continue;
+      analyzedNodes+=1;
+      if(n.coupling.metrics&&n.coupling.metrics.parsed===false)restricted+=1;
+      sum+=n.coupling.score;count+=1;
+    }
+    if(count>0)parts=['模块 '+overall.modules,'平均 '+Math.round(sum/count),'环 '+overall.cycles];
+    if(analyzedNodes>0&&restricted*3>=analyzedNodes*2)parts.push('多数文件解析受限');
+  }else{
+    parts.push('来自模块结构图');
+  }
+  card.querySelector('.cf-coupling-line2').textContent=parts.join(' · ');
+  if(btn)btn.disabled=COUPLING.running||!modulesAvailable();
+}
+
+/* ---- 工具栏按钮状态 ---- */
+function updateCouplingButton(){
+  var btn=$('cf-tb-coupling');
+  if(!btn)return;
+  if(!HOSTED){btn.hidden=true;return;}
+  btn.hidden=false;
+  var available=modulesAvailable();
+  btn.disabled=COUPLING.running||!available;
+  btn.setAttribute('data-tooltip',!available
+    ?'当前项目没有模块结构图，请先导入项目'
+    :'耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent、不消耗 token）');
+}
+
+/* ---- 详情弹窗：整体结论 + 模块表格（分数降序）+ 根目录/时间/受限数 ---- */
+function openCouplingDetails(){
+  var meta=couplingMetaOf();
+  if(!meta){toast('还没有耦合分析结果，请先「分析全部耦合」','err');return;}
+  var overall=meta.overall;
+  var stale=(COUPLING.stale&&COUPLING.stale.nodes)||{};
+  var rows=[];
+  var restricted=0;
+  if(CURVIEW==='modules'){
+    for(var i=0;i<G.nodes.length;i++){
+      var n=G.nodes[i];
+      if(!canAnalyzeCouplingNode(n)||!n.coupling)continue;
+      var m=n.coupling.metrics||{};
+      if(m.parsed===false)restricted+=1;
+      rows.push({id:n.id,title:n.title||n.id,level:n.coupling.level,score:n.coupling.score,
+        fanIn:m.fanIn,fanOut:m.fanOut,scc:m.sccSize,refs:m.refs,symbols:m.symbols,parsed:m.parsed!==false});
+    }
+    rows.sort(function(a,b){return b.score-a.score||String(a.id).localeCompare(String(b.id));});
+  }
+  var h=dHead('activity','耦合分析 · 屎山程度 '+couplingLevelText(overall.level))
+    +'<div class="cf-dbody">'
+    +'<div class="cf-kv"><b>整体</b><span style="color:'+couplingLevelColor(overall.level)+'">'
+    +esc(couplingLevelText(overall.level))+'（分数 '+overall.score+'）</span></div>'
+    +'<div class="cf-kv"><b>规模</b><span>模块 '+overall.modules+' · 已分析 '+overall.analyzed
+    +(overall.partial===true?'（部分结果）':'')+' · 环 '+overall.cycles+'</span></div>'
+    +(CURVIEW!=='modules'?'<div class="cf-hintbox">以下逐模块明细来自模块结构图，请切换到模块结构图查看。</div>':'');
+  if(CURVIEW==='modules'&&rows.length>0){
+    h+='<div class="cf-sec"><div class="cf-sec-title">模块明细（按分数降序）</div>'
+      +'<table class="cf-coupling-table"><thead><tr><th>模块</th><th>等级</th><th>分数</th>'
+      +'<th>扇入 Ca</th><th>扇出 Ce</th><th>环</th><th>内部引用/符号</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      h+='<tr><td>'+esc(r.title)+'</td>'
+        +'<td><span class="cf-coupling-level" data-level="'+r.level+'">'+esc(couplingLevelText(r.level))+'</span></td>'
+        +'<td>'+r.score+'</td><td class="dim">'+r.fanIn+'</td><td class="dim">'+r.fanOut+'</td>'
+        +'<td class="dim">'+r.scc+'</td><td class="dim">'+r.refs+' / '+r.symbols+(r.parsed?'':' · 解析受限')+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }else if(CURVIEW==='modules'){
+    h+='<div class="cf-sechint">模块图里还没有任何分析结果。</div>';
+  }
+  h+='<div class="cf-sec"><div class="cf-sechint">'
+    +'根目录：'+esc(meta.root||'—')+'<br>分析时间：'+esc(meta.at||'—')
+    +(restricted>0?('<br>解析受限的文件：'+restricted+' 个（按行数/体积给弱结论）'):'')
+    +((COUPLING.stale&&COUPLING.stale.overall===true)?'<br><span style="color:#f87171">结果可能已过期：源文件在分析后被修改过，建议重新分析。</span>':'')
+    +'</div></div>';
+  h+='</div>'
+    +'<div class="cf-dfoot" style="flex-wrap:wrap">'
+    +(modulesAvailable()?'<button type="button" class="cf-btn mini" data-act="rerun">重新分析</button>':'')
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="cf-btn cf-primary mini" data-act="close">关闭</button></div>';
+  openModal(h);
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  var rerun=d.querySelector('[data-act="rerun"]');
+  if(rerun)rerun.addEventListener('click',function(){closeModal();runCouplingAnalysis(null);});
+}
+
+/* ---- 渲染挂钩与初始化 ---- */
+var renderChromeCouplingBase=renderChrome;
+renderChrome=function(){renderChromeCouplingBase();renderCouplingCard();updateCouplingButton();};
+var renderNodesCouplingBase=renderNodes;
+renderNodes=function(){renderNodesCouplingBase();applyCouplingMarks();};
+function initCouplingExtras(){
+  if(!HOSTED){
+    var btn=$('cf-tb-coupling');
+    if(btn)btn.hidden=true;
+    return;
+  }
+  ensureCouplingCard();
+  renderCouplingCard();
+  applyCouplingMarks();
+  refreshCouplingStale(false);
+}
+/* ================= v1.2：拖拽导入（文件夹 / 压缩包） =================
+ * 上传通道是主路径（iframe 里拿不到拖入项的真实路径）：webkitGetAsEntry 递归
+ * 收文件 → 本地预检（数量/大小，不合法直接 toast）→ 确认框 → begin/file/finalize。
+ * 真实路径通道只在宿主暴露 getPathForFile 时生效（薄分支，有则用）。
+ * 独立模式（!HOSTED）下拖拽禁用，drop 时 toast 提示。所有动态文本一律 esc()。 */
+var DROP={overlay:null,depth:0,busy:false,cancelled:false,token:null};
+
+function dropArchiveKind(name){
+  return /\.(zip|tar|tar\.gz|tgz|7z|rar)$/i.test(String(name||''))?'archive':null;
+}
+function fmtBytes(n){
+  if(typeof n!=='number'||!(n>=0))return '0 B';
+  if(n<1024)return n+' B';
+  if(n<1024*1024)return (n/1024).toFixed(1)+' KB';
+  return (n/1024/1024).toFixed(1)+' MB';
+}
+/* 5.2 来源探测：File.path 已从 Electron 移除，逐个桥接探测，全失败返回 '' */
+function pathOfDropped(file){
+  try{if(file&&typeof file.path==='string'&&file.path)return file.path;}catch(e){}
+  var hosts=[window.__DSH_ELECTRON__,window.dsh,window.electron,window.webUtils];
+  for(var i=0;i<hosts.length;i++){
+    try{
+      var host=hosts[i];
+      if(host&&typeof host.getPathForFile==='function'){
+        var p=host.getPathForFile(file);
+        if(typeof p==='string'&&p)return p;
+      }
+    }catch(e){}
+  }
+  return '';
+}
+
+/* ---- 拖拽事件：dragenter 计数防抖，overlay pointer-events:none 不拦截 ---- */
+function ensureDropOverlay(){
+  if(DROP.overlay&&DROP.overlay.isConnected)return DROP.overlay;
+  var el=document.createElement('div');
+  el.className='cf-drop-overlay';
+  el.textContent='松开导入项目（文件夹 / zip / tar / tar.gz / 7z / rar）';
+  ROOT.appendChild(el);
+  DROP.overlay=el;
+  return el;
+}
+function showDropOverlay(show){
+  var el=show?ensureDropOverlay():DROP.overlay;
+  if(el)el.hidden=!show;
+}
+window.addEventListener('drop',function(e){
+  if(e&&e.preventDefault)e.preventDefault();
+});
+function initDropExtras(){
+  ROOT.addEventListener('dragenter',function(e){
+    if(e&&e.preventDefault)e.preventDefault();
+    DROP.depth+=1;
+    showDropOverlay(true);
+  });
+  ROOT.addEventListener('dragover',function(e){
+    if(e&&e.preventDefault)e.preventDefault();
+    if(e.dataTransfer)e.dataTransfer.dropEffect='copy';
+    showDropOverlay(true);
+  });
+  ROOT.addEventListener('dragleave',function(e){
+    DROP.depth=Math.max(0,DROP.depth-1);
+    if(DROP.depth===0)showDropOverlay(false);
+  });
+  ROOT.addEventListener('drop',function(e){
+    if(e&&e.preventDefault)e.preventDefault();
+    DROP.depth=0;
+    showDropOverlay(false);
+    if(e&&e.stopPropagation)e.stopPropagation();
+    onDropImport(e);
+  });
+  window.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&DROP.overlay&&!DROP.overlay.hidden){showDropOverlay(false);DROP.depth=0;}
+  });
+}
+
+/* ---- drop 分派：只处理第一个条目，其余提示忽略 ---- */
+function onDropImport(e){
+  if(DROP.busy){toast('正在导入上一个条目，请先等它完成','err');return;}
+  var items=(e.dataTransfer&&e.dataTransfer.items)||[];
+  var extra=items.length>1?('已忽略其余 '+(items.length-1)+' 个条目'):'';
+  if(!items.length){
+    toast('请拖入文件夹或压缩包（zip / tar / tar.gz / 7z / rar）','err');
+    return;
+  }
+  var item=items[0];
+  var entry=null;
+  try{entry=(typeof item.webkitGetAsEntry==='function')?item.webkitGetAsEntry():null;}catch(err){entry=null;}
+  if(!HOSTED){
+    toast('拖拽导入需要宿主环境','err');
+    return;
+  }
+  if(entry&&entry.isDirectory){
+    startDropDirectory(entry,extra);
+    return;
+  }
+  var file=null;
+  try{file=(typeof item.getAsFile==='function')?item.getAsFile():null;}catch(err){file=null;}
+  if(file&&dropArchiveKind(file.name)){
+    startDropArchiveFile(file,extra);
+    return;
+  }
+  if(entry&&entry.isFile){
+    toast('请拖入文件夹或压缩包（zip / tar / tar.gz / 7z / rar）'+(extra?('；'+extra):''),'err');
+    return;
+  }
+  toast('请拖入文件夹或压缩包（zip / tar / tar.gz / 7z / rar）','err');
+}
+
+/* ---- 目录条目递归（webkitGetAsEntry；空目录跳过，路径 / 分隔） ---- */
+function walkDropEntry(entry,prefix,out,state){
+  return new Promise(function(resolve){
+    if(!entry)return resolve();
+    if(entry.isFile){
+      entry.file(function(file){
+        if(DROP.cancelled)return resolve();
+        out.push({rel:prefix+entry.name,file:file});
+        state.bytes+=file.size||0;
+        resolve();
+      },function(){resolve();});
+      return;
+    }
+    if(!entry.isDirectory)return resolve();
+    var reader;
+    try{reader=entry.createReader();}catch(err){return resolve();}
+    var readBatch=function(){
+      try{
+        reader.readEntries(function(batch){
+          if(!batch.length)return resolve();
+          var chain=Promise.resolve();
+          batch.forEach(function(child){
+            chain=chain.then(function(){return walkDropEntry(child,prefix+entry.name+'/',out,state);});
+          });
+          chain.then(readBatch,function(){resolve();});
+        },function(){resolve();});
+      }catch(err){resolve();}
+    };
+    readBatch();
+  });
+}
+
+/* ---- 目录流：预检 → 确认 → 上传 → finalize ---- */
+function startDropDirectory(entry,extra){
+  if(!entry)return;
+  toast('正在统计文件夹内容…');
+  var out=[],state={bytes:0};
+  DROP.cancelled=false;
+  walkDropEntry(entry,'',out,state).then(function(){
+    if(DROP.cancelled)return;
+    if(out.length===0){toast('该文件夹是空的，没有可导入的文件','err');return;}
+    if(out.length>1000){toast('文件数超过 1000，已拒绝导入','err');return;}
+    if(state.bytes>500*1024*1024){toast('解压后超过 500 MB，已拒绝导入','err');return;}
+    if(extra)toast(extra);
+    openDropConfirm({
+      kind:'dir',name:entry.name,files:out.length,bytes:state.bytes,
+      upload:function(opts){uploadDirectory(out,state,opts);},
+    });
+  });
+}
+
+/* ---- 压缩包流（单文件）：确认 → 上传本体 → finalize ---- */
+function startDropArchiveFile(file,extra){
+  if(file.size>500*1024*1024){toast('压缩包超过 500 MB，已拒绝导入','err');return;}
+  if(extra)toast(extra);
+  DROP.cancelled=false;
+  openDropConfirm({
+    kind:'archive',name:file.name,files:null,bytes:file.size,
+    upload:function(opts){uploadArchive(file,opts);},
+  });
+}
+
+/* ---- 确认框：类型/名称/文件数/大小 + 项目名/深度/注释任务/补测试/记住 ---- */
+function openDropConfirm(info){
+  var saved={};
+  try{saved=JSON.parse(localStorage.getItem('cf-drop-opts')||'{}')||{};}catch(e){}
+  var depth=typeof saved.depth==='number'?saved.depth:4;
+  var fromComments=saved.fromComments!==false;
+  var addTests=saved.addTests!==false;
+  var baseName=info.kind==='archive'?String(info.name).replace(/\.(zip|tar\.gz|tgz|tar|7z|rar)$/i,''):String(info.name);
+  var kindText=info.kind==='archive'?'压缩包':'文件夹';
+  var targetText=info.kind==='archive'
+    ?('将解压到：<b>CodeFlow/imports/'+esc(baseName)+'/</b>')
+    :('将复制到：<b>CodeFlow/imports/'+esc(baseName)+'/</b>');
+  var h=dHead('upload','导入项目')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-drop-row"><b>类型</b><span>'+esc(kindText)+'</span></div>'
+    +'<div class="cf-drop-row"><b>名称</b><span>'+esc(info.name)+'</span></div>'
+    +'<div class="cf-drop-row"><b>文件数</b><span>'+(info.files==null?'—（解压后统计）':info.files)+'</span></div>'
+    +'<div class="cf-drop-row"><b>大小</b><span>'+fmtBytes(info.bytes)+'</span></div>'
+    +'<div class="cf-drop-row"><b>目标</b><span>'+targetText+'</span></div>'
+    +'<div class="cf-setrow"><label for="cf-drop-name">项目名</label>'
+    +'<input class="cf-in" id="cf-drop-name" type="text" spellcheck="false" value="'+esc(baseName)+'"></div>'
+    +'<div class="cf-setrow"><label for="cf-drop-depth">递归深度</label>'
+    +'<select class="cf-in" id="cf-drop-depth">'
+    +[2,4,6,10].map(function(n){return '<option value="'+n+'"'+(n===depth?' selected':'')+'>'+n+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="cf-setrow"><label class="cf-chk" style="gap:6px;display:flex;align-items:center"><input type="checkbox" id="cf-drop-comments"'+(fromComments?' checked':'')+'> <span>从注释生成任务节点</span></label></div>'
+    +'<div class="cf-setrow"><label class="cf-chk" style="gap:6px;display:flex;align-items:center"><input type="checkbox" id="cf-drop-tests"'+(addTests?' checked':'')+'> <span>未发现测试时补测试节点</span></label></div>'
+    +'<div class="cf-setrow"><label class="cf-chk" style="gap:6px;display:flex;align-items:center"><input type="checkbox" id="cf-drop-remember"> <span>记住这些选项</span></label></div>'
+    +'<div class="cf-sechint" style="color:#f87171;min-height:14px" id="cf-drop-err"></div>'
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="cancel">取消</button>'
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="cf-btn cf-primary" data-act="import">导入</button></div>';
+  openModal(h);
+  var d=$('cf-dialog');
+  var closeBtn=d.querySelector('[data-act="cancel"]');
+  var importBtn=d.querySelector('[data-act="import"]');
+  closeBtn.addEventListener('click',closeModal);
+  importBtn.addEventListener('click',function(){
+    var nameEl=d.querySelector('#cf-drop-name');
+    var depthEl=d.querySelector('#cf-drop-depth');
+    var commentsEl=d.querySelector('#cf-drop-comments');
+    var testsEl=d.querySelector('#cf-drop-tests');
+    var rememberEl=d.querySelector('#cf-drop-remember');
+    var errEl=d.querySelector('#cf-drop-err');
+    var opts={
+      name:String((nameEl&&nameEl.value)||'').trim()||baseName,
+      depth:Number(depthEl&&depthEl.value)||4,
+      fromComments:commentsEl?commentsEl.checked:true,
+      addTests:testsEl?testsEl.checked:true,
+    };
+    if(rememberEl&&rememberEl.checked){
+      try{localStorage.setItem('cf-drop-opts',JSON.stringify({depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests}));}catch(e){}
+    }
+    closeModal();
+    info.upload(opts);
+  });
+}
+
+/* ---- 进度弹窗：阶段文案 + 进度条 + 取消（仅上传阶段可取消） ---- */
+function openDropProgress(){
+  var h=dHead('upload','导入项目')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-kv"><b>状态</b><span id="cf-drop-stage">正在准备…</span></div>'
+    +'<div class="cf-drop-progress"><i id="cf-drop-bar"></i></div>'
+    +'<div class="cf-sechint" id="cf-drop-detail"></div>'
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="cancel">取消</button>'
+    +'<span style="flex:1"></span>'
+    +'<span class="cf-sechint">导入由宿主确定性执行，不唤醒 agent</span></div>';
+  openModal(h);
+  var d=$('cf-dialog');
+  var cancel=d.querySelector('[data-act="cancel"]');
+  cancel.addEventListener('click',function(){
+    DROP.cancelled=true;
+    if(DROP.token)dropAbort(DROP.token);
+    closeModal();
+    toast('已取消导入，暂存区已清理');
+  });
+}
+function dropStage(stage,detail,percent){
+  if($('cf-modal').hidden)return;
+  var stageEl=$('cf-drop-stage');
+  var barEl=$('cf-drop-bar');
+  var detailEl=$('cf-drop-detail');
+  if(stageEl)stageEl.textContent=stage;
+  if(detailEl)detailEl.textContent=detail||'';
+  if(barEl)barEl.style.width=(percent==null?0:Math.max(0,Math.min(100,percent)))+'%';
+  var cancel=$('cf-dialog').querySelector('[data-act="cancel"]');
+  if(cancel&&stage==='正在分析…')cancel.disabled=true;
+}
+function dropAbort(token){
+  apiPost('drop/abort',{token:token}).catch(function(){});
+}
+
+/* ---- 上传通道：begin → 逐文件 POST（octet-stream）→ finalize ---- */
+function uploadDirectory(out,state,opts){
+  if(!HOSTED){toast('拖拽导入需要宿主环境','err');return;}
+  DROP.busy=true;
+  DROP.token=null;
+  openDropProgress();
+  dropStage('正在准备…','共 '+out.length+' 个文件 · '+fmtBytes(state.bytes));
+  apiPost('drop/begin',{kind:'dir',name:opts.name,files:out.length,bytes:state.bytes})
+    .then(function(res){
+      if(!res||!res.token)throw new Error((res&&res.error)||'无法创建上传会话');
+      DROP.token=res.token;
+      var sent=0,sentBytes=0;
+      var chain=Promise.resolve();
+      out.forEach(function(entry){
+        chain=chain.then(function(){
+          if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
+          dropStage('正在上传 '+sent+'/'+out.length+' · '+fmtBytes(sentBytes)+' / '+fmtBytes(state.bytes),
+            entry.rel,out.length>0?(sent/out.length*100):0);
+          return fetchT('/codeflow/api/drop/file?token='+encodeURIComponent(res.token)
+            +'&path='+encodeURIComponent(entry.rel),
+            {method:'POST',headers:{'content-type':'application/octet-stream'},cache:'no-store',body:entry.file},120000)
+            .then(function(r){return parseResp(r);})
+            .then(function(){
+              sent+=1;
+              sentBytes+=entry.file.size||0;
+            });
+        });
+      });
+      return chain.then(function(){
+        if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
+        dropStage('正在分析…','正在生成任务流水线与模块结构图（宿主本地执行）');
+        return apiPost('drop/finalize',{token:res.token,kind:'dir',projectName:opts.name,
+          depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
+      });
+    })
+    .then(function(res){finishDropImport(res,opts,'folder');})
+    .catch(function(err){
+      var staleToken=DROP.token;
+      DROP.busy=false;
+      DROP.token=null;
+      if($('cf-modal')&&!$('cf-modal').hidden)closeModal();
+      if(err&&err.cancelled)return;
+      if(err&&err.status===409&&err.data&&err.data.code==='conflict'){
+        openDropConflict(err.data,function(decide){
+          if(staleToken)dropAbort(staleToken);
+          if(decide.action==='retry')uploadDirectory(out,state,Object.assign({},opts,decide.body));
+        });
+        return;
+      }
+      if(staleToken)dropAbort(staleToken);
+      toast('导入失败：'+((err&&err.message)||err),'err');
+    });
+}
+function uploadArchive(file,opts){
+  if(!HOSTED){toast('拖拽导入需要宿主环境','err');return;}
+  DROP.busy=true;
+  DROP.token=null;
+  openDropProgress();
+  dropStage('正在准备…',file.name+' · '+fmtBytes(file.size));
+  apiPost('drop/begin',{kind:'archive',name:file.name,files:1,bytes:file.size})
+    .then(function(res){
+      if(!res||!res.token)throw new Error((res&&res.error)||'无法创建上传会话');
+      DROP.token=res.token;
+      dropStage('正在上传 0/1 · 0 B / '+fmtBytes(file.size),file.name,0);
+      return fetchT('/codeflow/api/drop/file?token='+encodeURIComponent(res.token)
+        +'&path='+encodeURIComponent(file.name),
+        {method:'POST',headers:{'content-type':'application/octet-stream'},cache:'no-store',body:file},300000)
+        .then(function(r){return parseResp(r);})
+        .then(function(){
+          if(DROP.cancelled)throw Object.assign(new Error('已取消'),{cancelled:true});
+          dropStage('正在解压…','宿主正在解压 '+file.name+'（zip/tar 本地解析；7z/rar 用系统工具）');
+          return apiPost('drop/finalize',{token:res.token,kind:'archive',projectName:opts.name,
+            depth:opts.depth,fromComments:opts.fromComments,addTests:opts.addTests});
+        });
+    })
+    .then(function(res){finishDropImport(res,opts,'archive');})
+    .catch(function(err){
+      var staleToken=DROP.token;
+      DROP.busy=false;
+      DROP.token=null;
+      if($('cf-modal')&&!$('cf-modal').hidden)closeModal();
+      if(err&&err.cancelled)return;
+      if(err&&err.status===409&&err.data&&err.data.code==='conflict'){
+        openDropConflict(err.data,function(decide){
+          if(staleToken)dropAbort(staleToken);
+          if(decide.action==='retry')uploadArchive(file,Object.assign({},opts,decide.body));
+        });
+        return;
+      }
+      if(staleToken)dropAbort(staleToken);
+      toast('导入失败：'+((err&&err.message)||err),'err');
+    });
+}
+
+/* ---- 409 冲突：覆盖 / 改名 / 取消 ---- */
+function openDropConflict(conflict,retry){
+  var what=conflict.target==='dir'?('CodeFlow/imports/ 下已存在同名目录'):('已存在同名项目');
+  var h=dHead('alert-triangle','项目名冲突')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-hintbox">'+esc(what)+'：<b>'+esc(conflict.current||'')+'</b></div>'
+    +'<div class="cf-sechint">覆盖会先备份旧图文件（.bak-时间戳）再重新导入；改名会自动加 -2/-3 后缀。</div>'
+    +'</div>'
+    +'<div class="cf-dfoot">'
+    +'<button type="button" class="cf-btn" data-act="cancel">取消</button>'
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="cf-btn" data-act="rename">改名</button>'
+    +'<button type="button" class="cf-btn cf-danger" data-act="overwrite">覆盖</button>'
+    +'</div>';
+  openModal(h);
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="cancel"]').addEventListener('click',function(){closeModal();retry({action:'cancel'});});
+  d.querySelector('[data-act="rename"]').addEventListener('click',function(){closeModal();retry({action:'retry',body:{rename:true}});});
+  d.querySelector('[data-act="overwrite"]').addEventListener('click',function(){closeModal();retry({action:'retry',body:{overwrite:true}});});
+}
+
+/* ---- 完成：关弹窗 → 打开新项目（任务视图）→ toast 摘要 ---- */
+function finishDropImport(res,opts,kindLabel){
+  DROP.busy=false;
+  DROP.token=null;
+  if($('cf-modal')&&!$('cf-modal').hidden)closeModal();
+  if(!res||res.ok!==true){
+    toast('导入失败：'+((res&&res.error)||'未知错误'),'err');
+    return;
+  }
+  CURVIEW='tasks';
+  if(res.views)VIEWMETA=res.views;
+  if(res.graph&&valid(res.graph)){
+    syncRev=typeof res.rev==='number'?res.rev:syncRev;
+    G=clone(res.graph);
+    if(!G.meta)G.meta={};
+    sel={type:null,id:null};
+    renderAll();
+    applyView();
+    if(G.nodes.length)requestAnimationFrame(function(){fitView();});
+    renderViewTabs();
+  }
+  apiPost('view',{project:res.project,view:'tasks'}).catch(function(){});
+  refreshCouplingStale(true);
+  var overall=(res.coupling&&res.coupling.overall)||null;
+  var summary='已导入'+(kindLabel==='archive'?'（解压）':'')+' · 模块 '+(overall?overall.modules:'—')
+    +(overall?(' · 屎山程度 '+couplingLevelText(overall.level)):'');
+  if(res.warning)showBanner('导入完成，但有一些提醒：'+res.warning);
+  else toast(summary,'ok');
+  if(res.modulesAvailable===false)showBanner('模块结构图未能生成：目录里几乎没有源码；任务流水线已正常导入。');
+}
+
+/* ---- 真实路径通道（薄分支）：宿主桥接可用且拿到路径时，就地导入 ---- */
+function dropViaPath(path,kind,opts){
+  return apiPost('drop/path',Object.assign({path:path,kind:kind,depth:opts.depth,
+    fromComments:opts.fromComments,addTests:opts.addTests},opts.rename?{rename:true}:{},opts.overwrite?{overwrite:true}:{},opts.projectName?{projectName:opts.projectName}:{}));
+}
 boot();
 initCanvasExtras();
+initCouplingExtras();
+initDropExtras();
 })();
 </script>

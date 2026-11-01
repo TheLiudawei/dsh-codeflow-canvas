@@ -697,11 +697,14 @@ await check('registers /flow, /flow-new, /flow-import', () => {
     assert.equal(typeof command.handler, 'function')
   }
 })
-await check('registers the codeflow_canvas tool', () => {
-  assert.equal(recorded.tools.length, 1)
+await check('registers the codeflow_canvas and codeflow_features tools', () => {
+  assert.equal(recorded.tools.length, 2)
   assert.equal(recorded.tools[0].name, 'codeflow_canvas')
   assert.equal(typeof recorded.tools[0].execute, 'function')
   assert.equal(typeof recorded.tools[0].output.render, 'function')
+  assert.equal(recorded.tools[1].name, 'codeflow_features', 'v1.1 adds the feature-index tool')
+  assert.equal(typeof recorded.tools[1].execute, 'function')
+  assert.ok(recorded.tools[1].description.includes('零成本'), 'the description must advertise zero-cost querying')
 })
 await check('registers one prefix route at /codeflow', () => {
   assert.equal(recorded.routes.length, 1)
@@ -2421,6 +2424,78 @@ console.log('\n[v1.0 paths & config]')
     await rm(pathsWorkspace, { recursive: true, force: true })
   }
 }
+
+console.log('\n[v1.2 coupling + drop-import]')
+await check('the canvas carries the coupling card, badges, menus and toolbar entry', async () => {
+  const canvas = await read('assets/canvas/canvas.html')
+  assert.ok(canvas.includes("card.id='cf-coupling-card'"), 'the verdict card is created (dynamically)')
+  assert.ok(canvas.includes('id="cf-tb-coupling"'), 'the toolbar button exists')
+  assert.ok(canvas.includes("'分析耦合'") && canvas.includes("'分析全部耦合'"), 'both menu entries exist')
+  assert.ok(canvas.includes('function runCouplingAnalysis('), 'the analysis entry exists')
+  assert.ok(canvas.includes('function renderCouplingCard('), 'the card renderer exists')
+  assert.ok(canvas.includes('function canAnalyzeCouplingNode('), 'the file-level guard exists')
+  assert.ok(canvas.includes('屎山程度'), 'the verdict copy exists')
+  assert.ok(canvas.includes("'activity':"), 'the activity icon is defined locally')
+  assert.ok(canvas.includes('/codeflow/api/coupling'), 'talks to the coupling API')
+  assert.ok(canvas.includes("queueWriteNoRev('coupling'"), 'analysis rides the write queue without poisoning syncRev')
+  assert.ok(canvas.includes('来自模块结构图'), 'the tasks-view card names its source')
+  assert.ok(canvas.includes('当前项目没有模块结构图，请先导入项目'), 'the no-modules toast copy exists')
+})
+await check('coupling uses the fixed palette with scoped light-theme overrides', async () => {
+  const canvas = await read('assets/canvas/canvas.html')
+  for (const color of ['#22c55e', '#eab308', '#ef4444', '#15803d', '#a16207', '#b91c1c']) {
+    assert.ok(canvas.includes(color), `palette color ${color} present`)
+  }
+  // 浅色覆盖与 features 同一机制：带 html[data-cf-theme="light"] 前缀。
+  const start = canvas.indexOf('.cf-coupling-card{')
+  const end = canvas.indexOf('/* ---- v0.5.0', start)
+  const block = canvas.slice(start, end)
+  assert.ok(block.includes('html[data-cf-theme="light"] .cf-coupling-card'), 'light card override scoped')
+  assert.ok(block.includes('html[data-cf-theme="light"] .cf-coupling-badge[data-level="low"]'), 'light badge override scoped')
+  assert.ok(block.includes('html[data-cf-theme="light"] .cf-coupling-level[data-level="high"]'), 'light level chip override scoped')
+  const unscoped = block.split('\n').filter((line) => line.includes('html[data-cf-theme="light"] .cf-coupling-badge[data-level]') === false
+    && /^html\[data-cf-theme="light"\]/.test(line.trim()) === false
+    && /\.cf-coupling-badge\[data-level="low"\]\{color:#15803d/.test(line))
+  assert.deepEqual(unscoped, [], 'no unscoped light badge rules in the coupling block')
+})
+await check('the canvas carries the full drop-import flow', async () => {
+  const canvas = await read('assets/canvas/canvas.html')
+  assert.ok(canvas.includes('松开导入项目（文件夹 / zip / tar / tar.gz / 7z / rar）'), 'the overlay copy exists')
+  assert.ok(canvas.includes('function onDropImport('), 'the drop dispatcher exists')
+  assert.ok(canvas.includes('webkitGetAsEntry'), 'directory walking uses the entries API')
+  assert.ok(canvas.includes('getPathForFile'), 'the real-path probe exists (with upload fallback)')
+  for (const route of ['drop/begin', 'drop/file', 'drop/finalize', 'drop/abort']) {
+    assert.ok(canvas.includes(`apiPost('${route}'`) || canvas.includes(`/${route}?`), `talks to /codeflow/api/${route}`)
+  }
+  assert.ok(canvas.includes('cf-drop-opts'), 'remembered options persist in localStorage')
+  assert.ok(canvas.includes('data-act="overwrite"') && canvas.includes('data-act="rename"'), 'the conflict dialog offers 覆盖/改名')
+  assert.ok(canvas.includes('请拖入文件夹或压缩包（zip / tar / tar.gz / 7z / rar）'), 'the non-archive toast exists')
+  assert.ok(canvas.includes('拖拽导入需要宿主环境'), 'standalone mode degrades with a toast')
+  assert.ok(canvas.includes('application/octet-stream'), 'uploads declare the octet-stream type')
+})
+await check('the coupling and drop routes answer with the documented statuses', async () => {
+  const missing = await call('POST', '/codeflow/api/coupling', { project: 'web' })
+  assert.equal(missing.status, 400, 'a tasks-only project has no modules view to analyze')
+  assert.ok(missing.json.error.includes('模块结构图'), missing.json.error)
+  const verdict = await call('GET', '/codeflow/api/coupling?project=web&view=modules')
+  assert.equal(verdict.status, 200)
+  assert.equal(verdict.json.ok, true)
+  assert.equal(verdict.json.overall, null, 'no analysis yet → overall null')
+  const badBegin = await call('POST', '/codeflow/api/drop/begin', {})
+  // 无工作区的组合（fake context 没有 resolveCwd）→ 409；有工作区但 kind 非法 → 400。
+  assert.ok(badBegin.status === 409 || badBegin.status === 400, `begin refuses: ${badBegin.status}`)
+  assert.equal(badBegin.json.ok, false)
+  const unknown = await call('GET', '/codeflow/api/drop/abort')
+  assert.equal(unknown.status, 404, 'drop routes are POST-only')
+})
+await check('the scan budget copy and caps grew to 1000', async () => {
+  const canvas = await read('assets/canvas/canvas.html')
+  assert.ok(canvas.includes('最多读取 1000 个文件'), 'the import dialog names the new cap')
+  const importer = await read('lib/importer.js')
+  assert.ok(importer.includes('const MAX_FILES_CAP = 1000'), 'importer cap raised')
+  const analyst = await read('lib/analyst.js')
+  assert.ok(analyst.includes("Math.min(Math.max(Number(options.maxFiles) || 200, 1), 1000)"), 'analyst clamp raised')
+})
 
 console.log('\n[summary]')
 await cleanupFixture()

@@ -78,6 +78,12 @@
 | `nodes[].presented` | array | **可选**。实际提交给 `present` 工具的路径数组（`deliver` 节点专用，由宿主/agent 回填） |
 | `links` | array | 四元组 `[fromNodeId, fromSlotIdx, toNodeId, toSlotIdx]`；slot 序号 = 该节点 inputs/outputs 定义中的下标 |
 | `meta` | object | 时间戳；`meta.importedFrom`（导入项目）为项目源目录的绝对路径，也是撤销快照的根；`meta.strategy` ∈ `tasks` \| `modules` 标明视图归属 |
+| `nodes[].coupling` | object | **可选**（v1.2 起，仅模块结构图的文件级 `module` 节点）。模块耦合分析结果，由宿主 `POST /codeflow/api/coupling` 写入：`{level:"low"\|"medium"\|"high", score:0-100, intra, inter, metrics:{fanIn,fanOut,closure,depth,sccSize,symbols,refs,density,maxFanOut,lines,parsed}, at}`。宿主白名单清洗（未知键丢弃、数值夹紧、≤800 字节）；agent 与画布都应**原样保留**。`level` 阈值固定 30/60 |
+| `meta.coupling` | object | **可选**（v1.2 起）。整体「屎山程度」：`{version:1, root, at, overall:{level, score, modules, analyzed, cycles, partial, worst?}}`。模块结构图写全量；**任务图只镜像这一个键**并追加 `source:"modules"`。没有任何分析结果时两图都没有该键（旧图兼容，宿主不凭空补造） |
+
+> v1.2 备注：`stale`（结果过期）不是落盘字段——它是 `GET /codeflow/api/coupling` 随请求
+> 计算的临时状态（源文件 `mtime` 晚于 `coupling.at`，或模块数量漂移），画布只拿它做
+> 渲染叠加（徽章虚线灰化、卡片「可能过期」），绝不写进图文件。
 
 ## 约束
 

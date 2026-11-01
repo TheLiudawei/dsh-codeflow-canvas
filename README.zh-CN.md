@@ -15,6 +15,9 @@ v0.6.0 新增：**双视图（导入一次同时生成任务流水线与模块�
 agent 修改代码时高亮所属模块（依据真实写文件工具调用）、左侧导航可搜索的二级列表**。
 v1.0.1 修复与升级：**「测试运行」真实执行（自包含运行请求 + 回合结束对账 + 一键重试）、
 画布四边贴满面板、项目迁入 `<工作区>/CodeFlow/`（根目录可自定义，旧数据自动迁移）**。
+v1.2.0 新增：**模块耦合分析（文件级模块打低/中/高耦合标签、左上角整体「屎山程度」卡片、
+全部纯宿主计算零 token）与拖拽导入（把文件夹/压缩包拖进画布即导入，zip/tar 纯 Node 解析、
+7z/rar 用系统工具降级）**。
 
 ## 它长什么样
 
@@ -86,6 +89,9 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
   ├── POST /codeflow/api/view      ← 切换激活视图（写 view.json，不 bump rev、不扫描、不唤醒 agent）
   ├── POST /codeflow/api/save      ← "保存"按钮：宿主直接落盘（双视图都落），不打扰 agent（失败 507 + ok:false）
   ├── POST /codeflow/api/import    ← "导入项目"：宿主确定性扫描（lib/duo.js 一次生成两张图），不打扰 agent
+  ├── POST /codeflow/api/coupling  ← v1.2 耦合分析：算节点耦合 + 整体"屎山程度"，写两张图（零 LLM）
+  ├── GET  /codeflow/api/coupling  ← v1.2 过期判定（mtime 探测，10s 缓存，≤300 文件）
+  ├── POST /codeflow/api/drop/*    ← v1.2 拖拽导入：begin/file/finalize/abort 上传通道 + path 就地通道
   ├── POST /codeflow/api/action    ← 运行/新建：快照（RUN_*，按视图）→ 专用会话投递 [CodeFlow:*]（带 view+graphPath）
   ├── POST /codeflow/api/session   ← 新建/重建项目的专用会话
   ├── GET  /codeflow/api/activity  ← 实时思考流/步骤/进度/文件编辑记录（纯内存，700–1000ms 增量拉取）
@@ -122,6 +128,63 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
    会被宿主置 `failed`，画布不会永久转圈。
 8. **撤销以"次"为单位**。`lib/undo.js` 在投递前对项目源码树做快照；恢复时先备份当前状态，
    且只触碰快照候选范围——`node_modules`/`dist`/`.git` 里的改动永远不会被误删。
+
+## v1.2.0 的两项升级（全部零 LLM、零 npm 依赖、可离线）
+
+### A. 模块耦合分析（屎山程度）
+
+- **入口**：文件级模块节点右键「分析耦合」（只分析该文件）；空白画布右键「分析全部耦合」；
+  工具栏「耦合分析」按钮（任务视图下点击同样执行——宿主始终分析模块图，然后刷新当前视图的卡片）；
+  导入项目完成后自动跑一次「全部」。
+- **节点标签**：节点头部状态徽章左侧出现小胶囊 `耦合 · 低|中|高`（绿 `#22c55e` / 黄 `#eab308` /
+  红 `#ef4444`，浅色主题文字加深一档），卡片右缘一条 3px 颜色提示；不改节点尺寸与端口位置。
+- **左上角卡片**：`屎山程度 · 中`（大字 + 颜色点）+ `模块 12 · 平均 42 · 环 2`；部分结果时追加
+  `· 已分析 3/12`；过期时追加 `· 可能过期`（整体降饱和）。点击卡片打开详情弹窗：
+  整体结论 + 模块表格（按分数降序，列：模块/等级/分数/扇入 Ca/扇出 Ce/环/内部引用/符号）+
+  根目录、分析时间、解析受限文件数 + 「重新分析」。
+- **算法（附录化在 `lib/coupling.js` 顶部，全部常量可导出测试）**：
+  `score = round(0.6×intra + 0.4×inter)`，intra 是文件内符号互引图（边数/密度/最大扇出/符号环），
+  inter 是模块依赖图（扇入扇出/传递闭包/SCC 缩点后深度/成环/第三方 import 数），饱和函数
+  `sat(x,max)=min(1, log1p(x)/log1p(max))`；等级阈值固定 30/60。整体 = 行数加权的模块均分
+  + `min(15, 3×成环文件数)`。同一份源码两次分析结果逐字节一致（时间戳不参与评分）。
+- **持久化**：节点级 `node.coupling` 只写模块图；整体结论 `meta.coupling` 模块图写全量、
+  任务图**只镜像这一个键**（带 `source:"modules"`）。宿主按白名单清洗（未知键丢弃、数值夹紧、
+  ≤800 字节），旧图（无这些字段）打开与写回**字节不变**。
+- **过期（stale）不落盘**：`GET /api/coupling` 对每个有结果的节点 stat 一次源文件
+  （10 秒缓存，最多 300 个文件），`mtime` 晚于分析时间或模块数量漂移 → 该节点徽章虚线灰化、
+  卡片「可能过期」；不自动重算，给「重新分析」按钮。
+- **失败语义**：没有模块图 → 400 +「当前项目没有模块结构图，请先导入项目」（按钮置灰）；
+  源文件被删 → 该节点标签清除、计入 skipped、整体 partial；解析不出的语言按行数/体积给弱结论
+  并注明「解析受限」，绝不伪造精确数字。
+
+### B. 拖拽导入（文件夹 / 压缩包）
+
+- **交互**：拖入画布出现全屏虚线遮罩「松开导入项目（文件夹 / zip / tar / tar.gz / 7z / rar）」→
+  松手后先本地预检（类型/数量/大小，不合法直接 toast 不弹框）→ 确认框（类型/名称/文件数/大小、
+  目标提示、可编辑项目名、递归深度、注释任务与补测试开关、记住选项）→ 进度弹窗
+  （准备 → 上传 N/M · 字节 → 解压 → 分析，可取消）→ 完成后自动打开新项目（任务视图）+
+  自动耦合 + toast 摘要。一次拖入多个条目只处理第一个。
+- **两条通道**：画布 iframe 里拿不到拖入项的真实路径，所以**上传通道是主路径**——
+  文件夹经 `webkitGetAsEntry()` 递归读取后逐文件 POST 到暂存区
+  `CodeFlow/imports/.staging/<token>/`，finalize 时整体 rename 到 `imports/<项目名>/`；
+  压缩包上传本体后解压到 `imports/<包名>/`（暂存副本随即删除）。若宿主桥接暴露了
+  `getPathForFile`（特性探测 `window.__DSH_ELECTRON__/dsh/electron/webUtils`），压缩包可走
+  `POST /api/drop/path` 就地解压、文件夹就地导入（不复制）。
+- **解压**：zip/tar/tar.gz 纯 Node 解析（EOCD→中央目录→本地头；512 字节节头、ustar/pax/GNU
+  longname；gz 流式解压带 500 MB 熔断）；7z/rar 按魔数识别后依次尝试
+  `System32\tar.exe`（bsdtar）→ 7-Zip → WinRAR/UnRAR（`execFile`，120s 超时，全不可用 →
+  中文提示先手动解压）。文件名编码：UTF-8 标志 → 严格 UTF-8 → GBK 降级。
+  解压后「去壳」：根下只有一个目录时以该目录为项目根。
+- **安全与限额**：zip-slip / 绝对路径 / `..` / NUL / 符号链接全部拒绝（外部工具解压后还会
+  重新走一遍校验）；文件数 ≤1000、解压后总量 ≤500 MB、单文件 ≤64 MB、压缩包本体 ≤500 MB、
+  路径 ≤400 字符、层级 ≤32，超限 413/400 + 中文原因并清理暂存；暂存区 6 小时自动清扫
+  （30 分钟一轮），插件 dispose 时停止定时器。
+- **冲突**：`imports/<包名>` 目录或项目名已存在 → `409 {code:"conflict", target, current}`，
+  画布弹「覆盖 / 改名 / 取消」；覆盖先把旧图文件备份为 `.bak-<时间戳>`，改名自动加 `-2/-3`
+  后缀（项目名与目录名同时处理）。
+- **导入串联**：finalize 成功后复用现有链路——`importProjectDual` 一次生成两张图 →
+  v1.1 功能识别 → v1.2 自动耦合 → 专用会话绑定（持久绑定，不投递消息）→ 返回与
+  `/api/import` 同构的响应。扫描上限同步放宽为 **1000 个文件**（默认值仍是 200，行为不变）。
 
 ## v1.0.1 的修复与升级
 
@@ -299,9 +362,16 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 ```
 lib/index.js        插件入口：注册技能/命令/工具，串起 HTTP、会话、活动与撤销（按视图）
 lib/client.js       浏览器半侧：侧边栏图标 + main 面板 + "打开会话"导航桥
-lib/routes.js       /codeflow 路由与 JSON API（state/view/save/import/action/session/activity/undo/config）
+lib/routes.js       /codeflow 路由与 JSON API（state/view/save/import/action/session/activity/undo/config
+                    + v1.2 coupling/drop）
 lib/paths.js        v1.0：项目路径的唯一拼装点（默认根 <工作区>/CodeFlow、全局自定义根 +
                     单项目覆盖、config.json、一次性旧目录迁移）
+lib/coupling.js     v1.2：耦合分析引擎——符号互引图、模块依赖图、SCC/闭包/深度、评分与
+                    整体"屎山程度"、过期判定（纯函数 + runCoupling 编排，全部常量可导出测试）
+lib/archive.js      v1.2：zip/tar/tar.gz 纯 Node 解压、7z/rar 外部工具探测与降级、路径安全
+                    （zip-slip/符号链接/限额）、GBK 文件名、去壳
+lib/drop-import.js  v1.2：拖拽导入暂存区（begin/file/finalize/abort、限额、6h 清扫）、
+                    冲突/覆盖/改名、调用双图导入
 lib/duo.js          双导入编排：一次扫描同时生成任务流水线与模块结构图（共用项目名）
 lib/sessions.js     画布专用会话管理器：ensure/rebind/sidecar/错误恢复/投递
 lib/activity.js     Activity Hub：事件订阅、节点映射、环形缓冲、进度、文件编辑表（纯内存）
@@ -319,13 +389,17 @@ lib/canvas-page.js  把画布片段包成完整文档并注入启动数据
 assets/canvas/canvas.html      画布本体（由 tools/port-canvas.mjs 生成，勿手改）
 assets/skill/codeflow-canvas/  技能文档 + 四份 references
 tools/port-canvas.mjs          可复现的迁移脚本（逐条断言每个改动点）
+tools/patches/                 features（v1.1）与 coupling/drop（v1.2）的画布行为与样式补丁
 tools/theme-light.css          浅色主题覆盖层（生成时追加进画布样式表）
 tools/upstream/                上游 v0.2.2 画布片段原件
 tools/verify-client-bundle.mjs 客户端 bundle 的 10 项加载契约校验
 tests/validate.mjs             结构 + 行为自检（会话/活动/进度/撤销/双视图/编辑追踪/画布资产/XSS）
 tests/regression.mjs           v0.5.2 修复逐项回归（B2–B9）
-tests/e2e.mjs                  真 http server + 真 fetch 场景（含双导入/切换/重启/旧项目/损坏隔离）
+tests/e2e.mjs                  真 http server + 真 fetch 场景（含双导入/切换/重启/旧项目/损坏隔离
+                               + v1.2 耦合与拖拽导入）
 tests/undo.mjs                 撤销快照/恢复/LIFO/跨视图
+tests/coupling.mjs             v1.2 耦合引擎：评分/阈值/确定性/SCC/闭包/部分结果/清洗/过期
+tests/drop-import.mjs          v1.2 解压与暂存：zip/tar 夹具、zip-slip、GBK、限额、冲突、无 LLM 断言
 tests/contrast.mjs             浅色调色板的 WCAG AA 对比度审计（被自检调用）
 ```
 
@@ -333,10 +407,12 @@ tests/contrast.mjs             浅色调色板的 WCAG AA 对比度审计（被�
 
 ```bash
 # 自检（不需要 DSH 在跑）
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs   # 159 项：注册/路由/工具/技能/双视图/编辑追踪/资产
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs # 22 项：v0.5.2 修复逐项回归（B2–B9）
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs        # 16 个场景：真 http server + 真 fetch
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs       # 15 项：快照/恢复/LIFO/跨视图
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs   # 174 项：注册/路由/工具/技能/双视图/编辑追踪/资产/耦合/拖拽
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs # 27 项：v0.5.2 修复逐项回归（B2–B9）
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs        # 25 个场景：真 http server + 真 fetch
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs       # 16 项：快照/恢复/LIFO/跨视图
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/coupling.mjs   # 19 项：耦合引擎与持久化
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/drop-import.mjs # 24 项：解压/暂存/限额/冲突
 # macOS:
 # ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" tests/validate.mjs
 
@@ -407,6 +483,20 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 
 ## 已知限制与降级路径
 
+- **耦合分析只覆盖被扫到的语言**：`extractSymbols` 支持的语言族才有符号级 intra 指标；
+  其它扩展名（`.vue`、自定义后缀…）按行数/体积给弱结论（`parsed:false`，详情注明「解析受限」），
+  不伪造精确数字。分析对象是**模块图里的文件级节点**（≤36 个），不是全部 1000 个扫描文件。
+- **过期判定有 10 秒服务端缓存**（键：项目+分析时间+节点数）：改完源文件后最多 10 秒内
+  `GET /api/coupling` 仍可能报"未过期"；重新分析一次（新的分析时间）立即刷新。
+- **拖拽导入拿不到真实路径时走上传复制**：DSH 当前未向 iframe 暴露 `getPathForFile`，
+  所以文件夹导入会被复制到 `CodeFlow/imports/<名>/`（不是就地）；宿主未来暴露桥接后，
+  压缩包/文件夹自动改走就地通道，无需改画布。独立模式（直接打开 canvas.html）下拖拽禁用。
+- **拖拽导入的上限**：文件数 1000、解压后 500 MB、单文件 64 MB、路径 400 字符、层级 32；
+  zip64 / 加密压缩包 / 符号链接条目直接拒绝。7z/rar 依赖本机工具（System32 bsdtar / 7-Zip /
+  WinRAR），都没有时提示先手动解压。外部工具解压的结果会重新校验文件数/大小，但**无法**
+  替你防范外部工具自身的 zip-slip——不可信来源的压缩包请先手动检查。
+- **耦合/拖拽的写入也会 bump 对应视图的 rev**：分析完成后画布强制刷新采纳新图；若你的
+  autosave 撞上 409，按既有 syncConflict 流程提示，不会吞掉。
 - **修改高亮只认真实写文件工具**：allowlist 覆盖 `edit`/`write`/`ops_replace`/`apply_patch`/
   `multi_edit`/`str_replace_editor` 等常见名字；reasoning、对话文本、节点标题绝不参与推断。
   `shell` 重定向/脚本间接写文件**不在高亮范围内**（不假装能解析）。

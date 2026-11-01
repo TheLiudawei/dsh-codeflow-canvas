@@ -118,6 +118,18 @@ export function auditLightContrast(canvasText) {
     }
   }
 
+  // v1.2 耦合三色（tools/patches/coupling-ui.css 的同一组 token）：浅色主题下
+  // 徽章/等级标签文字用加深一档的颜色，压在 12% 底色合成上（白卡）。深色主题
+  // 用原色压深底，对比度远超 AA，不在本浅色审计范围内。
+  const couplingTokens = [
+    ['low', '#15803d', '#22c55e'],
+    ['medium', '#a16207', '#eab308'],
+    ['high', '#b91c1c', '#ef4444'],
+  ]
+  for (const [name, fg, base] of couplingTokens) {
+    add(`coupling badge ${name} text (light)`, hex(fg), composite(hex(base), 0.12, panel))
+  }
+
   return rows
 }
 

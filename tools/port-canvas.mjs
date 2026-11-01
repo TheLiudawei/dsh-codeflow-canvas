@@ -115,6 +115,42 @@ text = replaceOnce(
   'status bar session entry',
 )
 
+/* ------------------------------------------------ coupling toolbar btn --- */
+/* v1.2 耦合分析：工具栏按钮 = 「分析全部耦合」。宿主始终分析模块图，任务视图
+   点击同样执行（只刷卡片）。无模块图/运行中时置灰（coupling-ui.js 维护状态）。 */
+text = replaceOnce(
+  text,
+  '<button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>',
+  '<button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>\n'
+  + '    <button type="button" class="cf-tbtn" id="cf-tb-coupling" data-tooltip="耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent）" aria-label="耦合分析" disabled><i data-lucide="activity"></i>耦合分析</button>',
+  'toolbar coupling button',
+)
+
+/* ---------------------------------------------- coupling context menus --- */
+/* v1.2 右键入口：文件级模块节点 → 「分析耦合」；空白画布 → 「分析全部耦合」。
+   canAnalyzeCouplingNode/runCouplingAnalysis 定义在 coupling-ui.js（同 IIFE 提升）。 */
+text = replaceOnce(
+  text,
+  "    {label:'删除节点',icon:'trash-2',danger:true,act:function(){sel={type:'node',id:id};deleteSel();}}\n"
+  + '  ];\n'
+  + '  openMenu(items,x,y);\n'
+  + '}',
+  "    {label:'删除节点',icon:'trash-2',danger:true,act:function(){sel={type:'node',id:id};deleteSel();}}\n"
+  + '  ];\n'
+  + "  /* v1.2：文件级模块节点 → 单节点耦合分析（符号子节点不显示该菜单项） */\n"
+  + "  if(canAnalyzeCouplingNode(n)){items.splice(3,0,{label:'分析耦合',icon:'activity',act:function(){runCouplingAnalysis(id);}});}\n"
+  + '  openMenu(items,x,y);\n'
+  + '}',
+  'node menu coupling entry',
+)
+text = replaceOnce(
+  text,
+  "    {label:'导入项目…',icon:'folder-open',act:function(){openImportDialog();}},",
+  "    {label:'导入项目…',icon:'folder-open',act:function(){openImportDialog();}},\n"
+  + "    {label:'分析全部耦合',icon:'activity',act:function(){runCouplingAnalysis(null);}},",
+  'canvas menu analyze-all entry',
+)
+
 /* ----------------------------------------------------- nav pop container --- */
 /* 二级导航浮层：分类下 ≥2 个节点时弹出，可按名称搜索、按 ↑/↓ 选择、Enter 定位 */
 text = replaceOnce(
@@ -211,7 +247,9 @@ var ICONS={
   'shapes':'<path d="M8.5 2.8 13 10H4z"/><rect x="3" y="13.5" width="9" height="8" rx="1.2"/><circle cx="17.5" cy="17.5" r="4.2"/>',
   'unlink':'<path d="M18.5 13.5a4 4 0 0 0 0-5.7l-2.6-2.6a4 4 0 0 0-5.7 0l-1.3 1.3"/><path d="M5.5 10.5a4 4 0 0 0 0 5.7l2.6 2.6a4 4 0 0 0 5.7 0l1.3-1.3"/><path d="M4 4l2.5 2.5M17.5 17.5 20 20"/>',
   'undo-2':'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
-  'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>'
+  'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
+  'activity':'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  'upload':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'
 };
 function refreshIcons(){
   var pending=ROOT.querySelectorAll('[data-lucide]');
@@ -292,8 +330,8 @@ text = replaceOnce(
    一次生成任务流水线与模块结构图两张图，导入后在画布上随时切换 */
 text = replaceOnce(
   text,
-  "agent 将扫描目录：自动识别主语言、按各语言注释语法提取 TODO/FIXME 等标记，生成「扫描 → 注释解析 → 任务节点 → 审查 → 交付」工作流。最多读取 300 个文件。",
-  '宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 300 个文件。',
+  "agent 将扫描目录：自动识别主语言、按各语言注释语法提取 TODO/FIXME 等标记，生成「扫描 → 注释解析 → 任务节点 → 审查 → 交付」工作流。最多读取 1000 个文件。",
+  '宿主直接扫描目录（无需 agent，秒级完成）：同时生成任务流水线与模块结构图，导入后可随时切换查看与运行。最多读取 1000 个文件。',
   'import dialog hint',
 )
 text = replaceOnce(
@@ -441,20 +479,25 @@ function renderNavPop(){
   navPop.items=items;
   if(navPop.active>=items.length)navPop.active=items.length>0?items.length-1:-1;
   if(!items.length){list.innerHTML='<div class="cf-navempty">没有匹配的节点</div>';return;}
-  list.innerHTML=items.map(function(it,i){
-    var st=(EDIT_BY_VIEW[CURVIEW]||{})[it.n.id];
-    var tag=st?(st.state==='editing'?'<span class="cf-edittag">修改中</span>':st.state==='error'?'<span class="cf-edittag err">修改失败</span>':'<span class="cf-edittag">已修改</span>'):'';
-    return '<div class="cf-navrow'+(i===navPop.active?' active':'')+'" role="option" data-id="'+esc(it.n.id)+'" aria-selected="'+(i===navPop.active?'true':'false')+'">'
-      +'<span class="cf-navdot" style="background:'+typeColor(typeOf(it.n).cat)+'"></span>'
-      +'<span class="cf-navrow-main"><span class="cf-navrow-title">'+esc(it.title)+'</span>'
-      +(it.sub?'<span class="cf-navrow-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</span>':'')+'</span>'
-      +tag+'</div>';
-  }).join('');
+  list.innerHTML=items.map(function(it,i){return navRowHtml(it,i===navPop.active);}).join('');
+  bindNavRowEvents(list);
+  scrollNavPopActive();
+}
+/* 单行结构（v1.1 抽取：features 分组渲染复用同一行结构与事件绑定） */
+function navRowHtml(it,active){
+  var st=(EDIT_BY_VIEW[CURVIEW]||{})[it.n.id];
+  var tag=st?(st.state==='editing'?'<span class="cf-edittag">修改中</span>':st.state==='error'?'<span class="cf-edittag err">修改失败</span>':'<span class="cf-edittag">已修改</span>'):'';
+  return '<div class="cf-navrow'+(active?' active':'')+'" role="option" data-id="'+esc(it.n.id)+'" aria-selected="'+(active?'true':'false')+'">'
+    +'<span class="cf-navdot" style="background:'+typeColor(typeOf(it.n).cat)+'"></span>'
+    +'<span class="cf-navrow-main"><span class="cf-navrow-title">'+esc(it.title)+'</span>'
+    +(it.sub?'<span class="cf-navrow-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</span>':'')+'</span>'
+    +tag+'</div>';
+}
+function bindNavRowEvents(list){
   Array.prototype.forEach.call(list.querySelectorAll('.cf-navrow'),function(row){
     row.addEventListener('click',function(){pickNavRow(row.dataset.id);});
     row.addEventListener('pointermove',function(){setNavActiveId(row.dataset.id);});
   });
-  scrollNavPopActive();
 }
 function scrollNavPopActive(){
   var list=$('cf-navlist');
@@ -592,6 +635,20 @@ text = replaceOnce(
   "function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner');}",
   "function isBg(t){return !t.closest('.cf-node')&&!t.closest('.cf-link-hit')&&!t.closest('.cf-mini')&&!t.closest('.cf-zoomer')&&!t.closest('.cf-menu')&&!t.closest('.cf-modal')&&!t.closest('.cf-banner')&&!t.closest('.cf-navpop');}",
   'isBg excludes nav pop',
+)
+
+/* ------------------------------------------------- link svg dataset hooks --- */
+/* v1.1 整组高亮：每条连线的小 SVG 记录两端节点 id，spotlight 据此给
+   「两端都在组内」的连线加 .cf-spot-link（加粗/提亮）。 */
+text = replaceOnce(
+  text,
+  `    var svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('class','cf-linksvg');`,
+  `    var svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('class','cf-linksvg');
+    svg.setAttribute('data-from',l[0]);
+    svg.setAttribute('data-to',l[2]);`,
+  'link svg dataset hooks',
 )
 
 /* ----------------------------------------------------- nextId prefixes --- */
@@ -1829,21 +1886,61 @@ function renderSettingsDialog(cfg){
 }
 `
 
-/* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动 */
+/* ------------------------------------------------- features (v1.1) --- */
+/* 功能分组 / 整组高亮 / 功能归属 chips：行为与样式都放在 tools/patches/ 下，
+   由此处注入（上游模板保持不动）。生成天然幂等：每次都从模板重新打补丁。 */
+const FEATURES_CSS = readFileSync(new URL('patches/features-ui.css', import.meta.url), 'utf8').trim()
+const FEATURES_JS = readFileSync(new URL('patches/features-ui.js', import.meta.url), 'utf8').trim()
+if (!FEATURES_CSS.includes('.cf-fgroup{') || !FEATURES_CSS.includes('html[data-cf-theme="light"] .cf-fgroup')) {
+  throw new Error('features-ui.css: expected group rows with a light override')
+}
+if (!FEATURES_JS.includes('function spotlightNodes(') || !FEATURES_JS.includes('function renderGrouped(')) {
+  throw new Error('features-ui.js: expected spotlightNodes and renderGrouped')
+}
+
+/* --------------------------------------------------- coupling/drop (v1.2) --- */
+/* 模块耦合分析（卡片/徽章/菜单/工具栏）+ 拖拽导入（遮罩/确认/进度/上传）。
+   与 features 同一机制：patch 文件由本脚本注入，浅色覆盖带属性前缀，深浅
+   三色（绿/黄/红）都要过 tests/contrast.mjs 的 AA 审计。 */
+const COUPLING_CSS = readFileSync(new URL('patches/coupling-ui.css', import.meta.url), 'utf8').trim()
+const COUPLING_JS = readFileSync(new URL('patches/coupling-ui.js', import.meta.url), 'utf8').trim()
+const DROP_JS = readFileSync(new URL('patches/drop-ui.js', import.meta.url), 'utf8').trim()
+if (!COUPLING_CSS.includes('.cf-coupling-card{') || !COUPLING_CSS.includes('html[data-cf-theme="light"] .cf-coupling-card')) {
+  throw new Error('coupling-ui.css: expected the coupling card with a light override')
+}
+if (!COUPLING_CSS.includes('#22c55e') || !COUPLING_CSS.includes('#eab308') || !COUPLING_CSS.includes('#ef4444')) {
+  throw new Error('coupling-ui.css: expected the fixed 低/中/高 palette (#22c55e/#eab308/#ef4444)')
+}
+if (!COUPLING_JS.includes('function runCouplingAnalysis(') || !COUPLING_JS.includes('function renderCouplingCard(')) {
+  throw new Error('coupling-ui.js: expected runCouplingAnalysis and renderCouplingCard')
+}
+if (!DROP_JS.includes('function openDropConfirm(') || !DROP_JS.includes('function onDropImport(')) {
+  throw new Error('drop-ui.js: expected onDropImport and openDropConfirm')
+}
+if (!DROP_JS.includes('drop/begin') || !DROP_JS.includes('drop/finalize') || !DROP_JS.includes('drop/abort')) {
+  throw new Error('drop-ui.js: expected the begin/finalize/abort upload protocol')
+}
+
+/* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动。
+   FEATURES_CSS 排在它之前：浅色作用域审计从浅色主题注释开始切片，功能样式的
+   深色基线不会被误判为「未加前缀的浅色规则」。 */
 const LIGHT_CSS = readFileSync(new URL('theme-light.css', import.meta.url), 'utf8').trim()
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
   throw new Error('theme-light.css: expected the light variable block')
 }
-text = replaceOnce(text, '</style>', `\n${EXTRA_CSS}\n${LIGHT_CSS}\n</style>`, 'light theme stylesheet')
+text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + light theme stylesheet')
 
 /* ---------------------------------------------------- inject extras tail --- */
 /* 行为层注入点：boot() 之前定义（可包装已提升的函数声明），boot() 之后初始化挂钩。
    VIEW_JS 在前（视图状态是编辑高亮/切换的前提），ACTIVITY_JS 在后，SETTINGS_JS
-   最后（它包装 showBanner 并引用 ACT/runNode 等既有绑定）。 */
+   再后（它包装 showBanner 并引用 ACT/runNode 等既有绑定），FEATURES_JS 之后是
+   COUPLING_JS（包装 adoptServerState/refreshLatestSoon/renderChrome/renderNodes，
+   并提供右键菜单引用的 canAnalyzeCouplingNode/runCouplingAnalysis）与 DROP_JS
+   （拖拽导入，依赖 coupling 的 refreshCouplingStale 与 toast/openModal 等）。 */
 text = replaceOnce(
   text,
   '\nboot();\n})();',
-  '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\nboot();\ninitCanvasExtras();\n})();',
+  '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\n})();',
   'canvas extras script',
 )
 

@@ -20,6 +20,10 @@ switchable from the toolbar at any time), module highlighting when the agent edi
 v1.0.1 fixes and upgrades: **test runs execute for real (self-contained run requests +
 end-of-turn reconciliation + one-click retry), the canvas fills the panel on all four sides,
 and projects move under `<workspace>/CodeFlow/` (configurable root, automatic legacy migration)**.
+v1.2.0 added: **module coupling analysis (per-file low/medium/high labels, an overall
+"tech-debt level" card, computed entirely host-side with zero tokens) and drag-and-drop
+import (drop a folder or archive onto the canvas; zip/tar parsed in pure Node, 7z/rar via
+system tools with a graceful fallback)**.
 
 ## What it looks like
 
@@ -107,6 +111,9 @@ Browser (panel iframe)
   ├── POST /codeflow/api/view      ← switch active view (writes view.json; no rev bump, no scan, no agent wake-up)
   ├── POST /codeflow/api/save      ← "Save" button: host persists directly (both views), no agent involved (failure: 507 + ok:false)
   ├── POST /codeflow/api/import    ← "Import project": deterministic host scan (lib/duo.js produces both graphs in one pass)
+  ├── POST /codeflow/api/coupling  ← v1.2 coupling analysis: node coupling + the overall verdict, written to both graphs (zero LLM)
+  ├── GET  /codeflow/api/coupling  ← v1.2 staleness probe (mtime check, 10s cache, ≤300 files)
+  ├── POST /codeflow/api/drop/*    ← v1.2 drag-and-drop import: begin/file/finalize/abort upload channel + in-place path channel
   ├── POST /codeflow/api/action    ← run/new: snapshot (RUN_*, per view) → deliver [CodeFlow:*] to the dedicated session (with view+graphPath)
   ├── POST /codeflow/api/session   ← create/rebuild the project's dedicated session
   ├── GET  /codeflow/api/activity  ← live reasoning stream / steps / progress / file-edit records (in-memory only, 700–1000ms incremental pulls)
@@ -155,7 +162,78 @@ Key design decisions:
    backs up current state first and only touches the snapshot candidate scope — changes inside
    `node_modules`/`dist`/`.git` can never be mistakenly reverted.
 
+## The two v1.2.0 upgrades (all zero-LLM, zero npm dependencies, offline-capable)
+
+### A. Module coupling analysis (「屎山程度」 tech-debt verdict)
+
+- **Entries**: right-click a file-level module node →「分析耦合」(that file only); right-click the
+  empty canvas →「分析全部耦合」; the toolbar「耦合分析」button (clicking it on the task view still
+  works — the host always analyzes the module graph, then refreshes the current view's card); and
+  one automatic full run after every import.
+- **Node badge**: a small pill left of the status badge reading「耦合 · 低|中|高」(green `#22c55e` /
+  yellow `#eab308` / red `#ef4444`; darker text shades on the light theme) plus a 3px colour edge on
+  the card — node size and port positions untouched.
+- **Top-left card**: 「屎山程度 · 中」(big label + colour dot) plus 「模块 12 · 平均 42 · 环 2」;
+  partial runs append 「已分析 3/12」, staleness appends 「可能过期」 (whole card desaturated).
+  Clicking opens the details dialog: the overall verdict, a module table sorted by score (module /
+  level / score / fan-in Ca / fan-out Ce / cycles / intra refs & symbols), the scanned root, the
+  analysis time, the restricted-file count and a 「重新分析」 button.
+- **Algorithm** (constants exported from the top of `lib/coupling.js`): `score = round(0.6×intra +
+  0.4×inter)` where intra comes from the in-file symbol cross-reference graph (edges / density /
+  max fan-out / symbol cycles) and inter from the module dependency graph (fan-in/out, transitive
+  closure, depth on the SCC-condensed DAG, being in a cycle, external packages), saturated by
+  `sat(x,max)=min(1, log1p(x)/log1p(max))`; level thresholds fixed at 30/60. The overall verdict is
+  a line-weighted mean plus `min(15, 3×cyclic files)`. The same tree always yields byte-identical
+  scores (timestamps never feed the score).
+- **Persistence**: node-level `node.coupling` only on the modules graph; the verdict mirrors to
+  `meta.coupling` — full on the modules graph, exactly one key on the tasks graph
+  (`source:"modules"`). The host whitelist-cleans (unknown keys dropped, numbers clamped, ≤800
+  bytes) and pre-1.2 graphs stay byte-identical.
+- **Staleness never lands on disk**: `GET /api/coupling` stats each analyzed file (10s cache, ≤300
+  files); a newer mtime or a module-count drift greys the badge (dashed) and tags the card — never
+  auto-recomputed, the dialog offers 「重新分析」.
+- **Failure semantics**: no modules graph → 400 + an actionable Chinese message (button disabled);
+  a deleted source file clears that node's label and counts as skipped (overall partial);
+  unparsable languages degrade to a line/byte-based weak verdict marked 「解析受限」 — never
+  fabricated precision.
+
+### B. Drag-and-drop import (folders / archives)
+
+- **Interaction**: dropping onto the canvas shows a full-screen dashed overlay
+  「松开导入项目（文件夹 / zip / tar / tar.gz / 7z / rar）」 → local pre-check on release
+  (type/count/size; invalid → toast only) → confirm dialog (type/name/count/size, target hint,
+  editable project name, recursion depth, comment-tasks and add-tests toggles, remember option) →
+  progress dialog (prepare → upload N/M · bytes → extract → analyze, cancellable) → the new project
+  opens on the task view with automatic coupling and a summary toast. Multiple dropped items: only
+  the first is processed.
+- **Two channels**: the canvas iframe cannot read dropped paths, so the **upload channel is the
+  primary path** — folders are read via `webkitGetAsEntry()` and POSTed file-by-file into the
+  staging tree `CodeFlow/imports/.staging/<token>/`, then renamed into place on finalize; archives
+  upload the blob and extract into `imports/<package>/` (the staged copy is deleted right after).
+  When the host bridge exposes `getPathForFile` (feature-detected on
+  `window.__DSH_ELECTRON__` / `dsh` / `electron` / `webUtils`), `POST /api/drop/path` imports
+  folders in place and extracts archives in place (no copies).
+- **Extraction**: zip/tar/tar.gz parsed in pure Node (EOCD → central directory → local headers;
+  512-byte headers, ustar/pax/GNU longname; gz streamed with a 500 MB fuse); 7z/rar are detected by
+  magic and delegated to `System32\tar.exe` (bsdtar) → 7-Zip → WinRAR/UnRAR (`execFile`, 120s
+  timeout; none available → a Chinese message asking for a manual extraction). File-name decoding:
+  UTF-8 flag → strict UTF-8 → GBK fallback. After extraction a lone root directory becomes the
+  project root (去壳).
+- **Safety & caps**: zip-slip / absolute paths / `..` / NUL / symlinks are refused (external-tool
+  output is re-verified afterwards); ≤1000 files, ≤500 MB extracted, ≤64 MB per file, ≤500 MB
+  archive, ≤400-char paths, ≤32 levels — violations answer 413/400 with a Chinese reason and clean
+  the staging tree; staging sweeps every 30 minutes for trees older than 6h; the sweeper stops on
+  plugin dispose.
+- **Conflicts**: an existing `imports/<package>` directory or project name answers
+  `409 {code:"conflict", target, current}` and the canvas offers 覆盖 / 改名 / 取消; overwrite backs
+  the old graph files up as `.bak-<timestamp>` first, rename appends `-2`/`-3` to both names.
+- **Wiring**: finalize reuses the existing chain — `importProjectDual` produces both graphs → the
+  v1.1 feature index → v1.2 automatic coupling → durable session binding (no message delivery) →
+  a response shaped like `/api/import`. The scan budget grows to **1000 files** (defaults stay
+  200/4 — behaviour unchanged).
+
 ## The v1.0.1 fixes and upgrade
+
 
 ### A. 「测试运行」空转 → 真实执行、明确失败、一键重试
 
@@ -391,9 +469,17 @@ Where each problem found in field testing (v0.4.2/v0.5.1) landed in this version
 ```
 lib/index.js        Plugin entry: registers skill/commands/tools; wires HTTP, sessions, activity, undo (per view)
 lib/client.js       Browser side: sidebar icon + main panel + "open session" navigation bridge
-lib/routes.js       /codeflow routes and JSON API (state/view/save/import/action/session/activity/undo/config)
+lib/routes.js       /codeflow routes and JSON API (state/view/save/import/action/session/activity/undo/config
+                    + v1.2 coupling/drop)
 lib/paths.js        v1.0: the single place that assembles project paths (default <ws>/CodeFlow root,
                     global custom root + per-project override, config.json, one-time legacy migration)
+lib/coupling.js     v1.2: coupling engine — symbol cross-reference graph, module dependency graph,
+                    SCC/closure/depth, scoring and the overall verdict, staleness probe (pure
+                    functions + a runCoupling orchestrator; every constant exported for tests)
+lib/archive.js      v1.2: pure-Node zip/tar/tar.gz extraction, 7z/rar external-tool probing with
+                    fallback, path safety (zip-slip/symlinks/caps), GBK names, single-root stripping
+lib/drop-import.js  v1.2: drop-import staging (begin/file/finalize/abort, caps, 6h sweep),
+                    conflict/overwrite/rename, calls the dual import
 lib/duo.js          Dual-import orchestration: one scan produces both pipeline and module graph (shared project name)
 lib/sessions.js     Canvas dedicated-session manager: ensure/rebind/sidecar/error recovery/delivery
 lib/activity.js     Activity Hub: event subscription, node mapping, ring buffer, progress, file-edit table (memory only)
@@ -425,10 +511,12 @@ tests/contrast.mjs             WCAG AA contrast audit for the light palette (cal
 
 ```bash
 # Self-checks (DSH does not need to be running)
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs   # 159 checks: registration/routes/tools/skill/dual views/edit tracking/assets
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs # 22 checks: per-fix regressions for v0.5.2 (B2–B9)
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs        # 16 scenarios: real http server + real fetch
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs       # 15 checks: snapshot/restore/LIFO/cross-view
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs   # 174 checks: registration/routes/tools/skill/dual views/edit tracking/assets/coupling/drop
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs # 27 checks: per-fix regressions for v0.5.2 (B2–B9)
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs        # 25 scenarios: real http server + real fetch (incl. v1.2 coupling & drop)
+ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs       # 16 checks: snapshot/restore/LIFO/cross-view
+tests/coupling.mjs   # 19 checks: the coupling engine and its persistence
+tests/drop-import.mjs # 24 checks: extraction/staging/caps/conflicts
 # macOS:
 # ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" tests/validate.mjs
 
@@ -510,6 +598,25 @@ on the canvas.
 
 ## Known limitations & degradation paths
 
+- **Coupling only covers the languages the scanner knows**: only language families with a symbol
+  extractor get intra metrics; other extensions (`.vue`, custom suffixes…) degrade to a
+  line/byte-based weak verdict (`parsed:false`, flagged 「解析受限」 in the details). The analysis
+  covers the module graph's file-level nodes (≤36), not all 1000 scanned files.
+- **The staleness probe caches for 10 seconds** (key: project + analysis time + node count): right
+  after editing a source file `GET /api/coupling` may still report "fresh" for up to 10s;
+  re-analyzing once (a new analysis time) refreshes immediately.
+- **Drag-import copies when no real path is available**: DSH does not currently expose
+  `getPathForFile` to the iframe, so folder imports are copied to `CodeFlow/imports/<name>/`
+  (not in-place); once the host exposes the bridge, archives/folders switch to the in-place
+  channel automatically. Standalone mode (opening canvas.html directly) disables dropping.
+- **Drop-import caps**: 1000 files, 500 MB extracted, 64 MB per file, 400-char paths, 32 levels;
+  zip64 / encrypted archives / symlink entries are refused outright. 7z/rar depend on local tools
+  (System32 bsdtar / 7-Zip / WinRAR); with none available the canvas asks for a manual extraction.
+  External-tool output is re-verified for count/size, but the tool itself cannot be prevented from
+  zip-slipping — inspect untrusted archives manually first.
+- **Coupling/drop writes bump the view revs too**: the canvas force-refreshes after an analysis;
+  if your autosave races into a 409, the existing syncConflict flow surfaces it instead of
+  swallowing it.
 - **Edit highlighting only trusts real file-write tools**: the allowlist covers common names
   like `edit`/`write`/`ops_replace`/`apply_patch`/`multi_edit`/`str_replace_editor`; reasoning,
   conversation text and node titles never participate in inference. Writes via `shell`
