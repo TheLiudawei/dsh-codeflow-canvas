@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.3.1-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.2-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -34,6 +34,16 @@ It is a DSH (DeepSeek Harness) plugin, ported from the ZCode plugin `codeflow-ca
 - **A graph is reviewable, a transcript is not.** You see the plan, the order, and what is stuck, all at once.
 - **Import costs nothing.** Scans, symbol extraction, coupling scores and feature mapping are all deterministic, local computation — no model call, no network, no npm dependency.
 - **Nothing is faked.** A node only turns green when the agent actually ran something and reported it back; an unexecuted node is reconciled to `failed`, not left spinning.
+
+## What changed in 1.3.2
+
+Card identity got stricter, and two defects the CI matrix caught are fixed.
+
+- **Only path-shaped tokens become source anchors.** The old rule accepted anything with a dot, so `v1.2.3`, `3.5`, `https://example.com/x.md` and `e.g.` all produced anchors — two unrelated cards could pair, or the same card could stop pairing after a re-import. A token now qualifies when it contains a separator or ends in a known source extension (`SOURCE_EXTENSIONS`, ~90 entries); scheme URLs, version/number patterns, abbreviations and timestamps are rejected. Five counterexamples and seven positive cases live in `tests/cards.mjs`.
+- **Drifted cards drop back to `pending`.** When the source changed since the import, the old "done" is no longer evidence of the current state: the card returns to `pending` (the same rule as "not executed means failed"), keeps a note `源码已变，需重跑`, and shows an amber badge that disappears as soon as it runs again. No drift, no change.
+- **`npm test` is now `tests/run-all.mjs`.** Sequential spawn, exit codes collected, one summary table with per-suite timing — aligned with CI's `if: always()`, so a failing suite never hides the rest.
+- **Undo detects same-size edits.** `files.modified` was decided from size plus a 1 ms mtime tolerance; a same-size edit written within the same millisecond was reported as unchanged on Linux. `dryRun` and `restore` now fall back to comparing contents in that ambiguous case.
+- **Fixture cleanup retries.** `rm(recursive)` occasionally threw `ENOTEMPTY` on macOS while the plugin's debounced persistence wrote a file back; recursive removals in `validate` go through a short-backoff retry instead of failing the run.
 
 ## What changed in 1.3.1
 

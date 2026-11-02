@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.3.1-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.2-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -34,6 +34,16 @@
 - **图能审，聊天记录不能。** 计划、顺序、卡在哪一步，一眼看完。
 - **导入不花钱。** 扫描、符号提取、耦合评分、功能归属全是本地确定性计算——不调模型、不联网、不依赖 npm 包。
 - **不伪造。** 只有 agent 真的执行并回报了，节点才会变绿；没执行的节点会被对账为 `failed`，不会永远转圈。
+
+## 1.3.2 变更
+
+卡片身份更严格了，另外修掉两个由 CI 矩阵抓出来的缺陷。
+
+- **只有「像路径」的 token 才能成为源锚点。** 旧规则接受任何带小数点的片段，于是 `v1.2.3`、`3.5`、`https://example.com/x.md`、`e.g.` 都会变成锚点——两张无关的卡片可能配到一起，或者同一张卡片换个导入就配不上了。现在 token 要么含分隔符，要么命中已知源码扩展名（`SOURCE_EXTENSIONS`，约 90 项）；带 scheme 的 URL、版本号/纯数字、缩写、时间戳一律排除。五条反例与七条正例都在 `tests/cards.mjs`。
+- **漂移的卡片退回 `pending`。** 源码在导入后变过，旧的「完成」就不再是当前状态的证据：卡片退回 `pending`（与「未执行即失败」同一口径），detail 记一条「源码已变，需重跑」，画布上挂琥珀色徽章，重跑后徽章自动消失。没有漂移则什么都不动。
+- **`npm test` 改为 `tests/run-all.mjs`。** 顺序 spawn、收集退出码、末尾一张带耗时的汇总表——与 CI 的 `if: always()` 对齐，失败的套件不再掩盖后面的套件。
+- **撤销能识别同尺寸修改。** `files.modified` 原先按 size 加 1ms 的 mtime 容差判定；同尺寸改动若落在同一毫秒内，Linux 上会被判成「未修改」。`dryRun` 与 `restore` 现在在这种模糊情形下按内容兜底。
+- **临时目录清理加重试。** `rm(recursive)` 在 macOS 上偶尔抛 `ENOTEMPTY`——插件去抖落盘把文件刚放回去；`validate` 里的递归删除改为短退避重试，不再因竞态整轮标红。
 
 ## 1.3.1 变更
 
