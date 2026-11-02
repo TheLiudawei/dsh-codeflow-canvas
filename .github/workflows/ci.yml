@@ -1,0 +1,68 @@
+name: CI
+
+# Runs the plugin's dependency-free test suites on all three desktop platforms
+# DSH ships for. The plugin has no npm dependencies and no build step, so the
+# only requirement is a Node runtime — the suites import node:* builtins and
+# this repository's own modules, never the DSH host.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/images/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # One platform failing must still tell us about the other two.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Environment
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          git --version
+
+      - name: validate — structure, behaviour, canvas assets, XSS
+        shell: bash
+        run: node tests/validate.mjs
+
+      - name: regression — per-fix regressions
+        shell: bash
+        run: node tests/regression.mjs
+
+      - name: cards — re-import merge, stale cards, opt-out path
+        shell: bash
+        run: node tests/cards.mjs
+
+      - name: menu — menu model, ARIA, build-time render, popover fit
+        shell: bash
+        run: node tests/menu.mjs
+
+      - name: architecture — layering and acyclic static imports
+        shell: bash
+        run: node tests/architecture.mjs
