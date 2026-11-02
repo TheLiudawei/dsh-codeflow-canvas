@@ -2,12 +2,12 @@
 
 <h1 align="center">CodeFlow 工作流画布</h1>
 
-<p align="center"><b>DSH 上的 ComfyUI 风格编程工作流画布。<br/>每个节点都是一个 agent 真实执行的任务，每条连线都是一条数据流依赖。</b></p>
+<p align="center"><b>把 agent 的编码过程变成一张可审、可回退的图。<br/>每个节点是一个真实任务，每条连线是一条数据流依赖，每个绿灯都是一个证据。</b></p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.4.0-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.4.1-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -25,17 +25,42 @@
 
 ---
 
-平时你在对话里排计划，然后往下翻。CodeFlow 把计划从对话里拎出来放到画布上：任务是可拖动的节点卡片，依赖是真实的连线，agent 在工作区里逐个执行，再把结果写回卡片。
+CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一个仓库，它变成一张节点图——画布形态是 ComfyUI 风格的。每个节点是 agent 在你的工作区里执行的任务，每条连线是依赖。真正把它和别人区分开的不是图本身，而是**这张图被允许声称什么**。
 
-它是 DSH（DeepSeek Harness）插件，从 ZCode 插件 `codeflow-canvas` v0.2.2 迁移而来。画布编辑器沿用原实现；会话、工具协议、持久化、交付、撤销这一整套宿主接线全部为 DSH 重写。
+它是 DSH 插件，从 ZCode 插件 `codeflow-canvas` v0.2.2 迁移而来。画布编辑器沿用原实现；会话、工具协议、持久化、交付、撤销这一整套宿主接线全部为 DSH 重写。
 
 > 截图是中文界面——画布跟随 DSH 的语言与主题。它自带深/浅两套调色板，随宿主实时切换。
 
-## 为什么用画布
+## 问题在哪
 
-- **图能审，聊天记录不能。** 计划、顺序、卡在哪一步，一眼看完。
-- **导入不花钱。** 扫描、符号提取、耦合评分、功能归属全是本地确定性计算——不调模型、不联网、不依赖 npm 包。
-- **不伪造。** 只有 agent 真的执行并回报了，节点才会变绿；没执行的节点会被对账为 `failed`，不会永远转圈。
+你让 agent 给 8 个文件加校验，它回你一句「完成了」。
+
+然后问题才开始：哪 8 个？都过了吗？有没有动你没让它动的地方？万一改坏了，要退回到哪一步？**这些答案只以散文形式留在对话记录里，而散文不是 diff。**
+
+## 画布改变了什么
+
+| | 在对话里排计划 | CodeFlow 画布 |
+| --- | --- | --- |
+| 计划从哪来 | 每次都由模型重新生成 | 从代码树算出来：扫描、符号提取、注释标记。不调模型、不耗 token、不联网 |
+| 哪里失败了、为什么 | 只能从对话里回溯拼凑 | 落在具体节点卡片上，带原因，而且节点会停下 |
+| 「它说完成了」 | 只能选择相信 | 回合结束没有进度回报 → 对账为 `failed` |
+| 改坏了怎么退 | 手动 git 操作，容易误伤 | 每次运行前自动快照；一条命令同时回滚文件与节点状态 |
+| 交付物 | 散落在聊天记录里 | 原生 `present` 卡片 + `docs/DELIVERY.md` |
+
+## 对话记录做不到的三件事
+
+**1 · 导入不经过模型。** `/flow-import` 与导入对话框在本地扫描代码树——语言识别、符号、`TODO`/`FIXME` 标记——秒级产出任务流水线与模块结构图。同一提交扫描两次，任务、文件、评分完全一致，因为没有任何东西是编出来的。 → `lib/importer.js`、`lib/analyst.js`、`lib/duo.js`
+
+**2 · 撤销一次运行，而不是一个文件。** 每次 `RUN_NODE` / `RUN_ALL` 前都会快照项目树（排除 `node_modules`、`dist`、`.git` 等）。「撤销运行」把文件**和**节点状态一起恢复，严格 LIFO，DSH 重启后仍可用。恢复之前会先备份当前状态——所以恢复永远不会毁掉它覆盖掉的东西。 → `lib/undo.js`
+
+**3 · 绿灯是有含义的。** prompt 入队时节点才变 `running`，只有 agent 真回报了才到 `done`。回合结束仍无进度 → 宿主标 `failed`（"agent 未执行该节点"）并给一键重试。**绝不从 agent 的说法推断结果。** → `lib/gestures.js`（乐观置 `running`）、`lib/index.js`（回合结束对账）、`lib/activity.js`
+
+## 1.4.1 变更
+
+只动文档，没有代码变更。
+
+- **首屏从"描述形态"改成"陈述立场"。** 开头先讲问题（"它说完成了——哪 8 个文件？改坏了怎么退？"），接一张五行对比表（对话里排计划 vs 画布），再给三条"对话记录做不到"的声明——每条都标出对应的代码文件（`lib/importer.js`、`lib/undo.js`、`lib/gestures.js` + `lib/index.js`）。
+- **对比表里没有一个编造的数字。** 每一行都是能在源码里读到的行为——这正是这个插件的立场：没有证据的声明，就是它想解决的问题。
 
 ## 1.4.0 变更
 
