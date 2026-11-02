@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.1-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -34,6 +34,16 @@ It is a DSH (DeepSeek Harness) plugin, ported from the ZCode plugin `codeflow-ca
 - **A graph is reviewable, a transcript is not.** You see the plan, the order, and what is stuck, all at once.
 - **Import costs nothing.** Scans, symbol extraction, coupling scores and feature mapping are all deterministic, local computation — no model call, no network, no npm dependency.
 - **Nothing is faked.** A node only turns green when the agent actually ran something and reported it back; an unexecuted node is reconciled to `failed`, not left spinning.
+
+## What changed in 1.3.1
+
+No feature changes — this release makes the suite trustworthy on machines that are not the author's.
+
+- **CI runs 16 suites on three platforms.** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22, all blocking. Every step carries `if: always()`, so one failing suite still lets the rest report — a single run shows the whole picture.
+- **Fixed a real geometry bug.** `fit-popover` computed its minimum height as `Math.min(minListHeight, Math.max(minListHeight, innerH))` — identically `minListHeight` — so a short stage still demanded 96px and pushed the list past the bottom edge. It is now `Math.min(minListHeight, innerH)`, with `maxHeight` clamped to the available height; the test for that boundary actually exercises it (stage 100px, inner height 84px).
+- **The tests no longer depend on the checkout.** `\n`-anchored assertions broke on CRLF checkouts (`.gitattributes` now pins LF, and the shared `read()` normalises); one assertion only held on Windows and was removed in favour of the explicit win32/POSIX pair; four `/flow-import` checks were passing only because a stale directory happened to exist in `%TEMP%`; Windows-path assertions in the workspace and browse suites now pass an explicit platform. Closes the failures reported in [#2](https://github.com/TheLiudawei/dsh-codeflow-canvas/issues/2).
+- **Canvas freshness is a content hash.** The generator stamps the hash of its inputs into the canvas header (`tools/canvas-sources.mjs` is the single input list) and the button audit recomputes it, instead of comparing mtimes — which cannot work in a fresh clone.
+- **`npm test`** runs all 16 suites.
 
 ## What changed in 1.3.0
 
