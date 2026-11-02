@@ -4,6 +4,11 @@
   "description": "ComfyUI-style coding workflow canvas for DSH: a native sidebar panel renders a node graph where every node is an agent-executable coding task and every link is a dataflow dependency.",
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "test": "node tests/validate.mjs && node tests/regression.mjs && node tests/cards.mjs && node tests/menu.mjs && node tests/architecture.mjs && node tests/logging.mjs && node tests/undo.mjs && node tests/coupling.mjs && node tests/features.mjs && node tests/workspace.mjs && node tests/browse.mjs && node tests/import-shells.mjs && node tests/log-viewer.mjs && node tests/drop-import.mjs && node tests/e2e.mjs && node tests/buttons.mjs",
+    "test:validate": "node tests/validate.mjs",
+    "test:e2e": "node tests/e2e.mjs"
+  },
   "exports": {
     ".": {
       "default": "./lib/index.js"

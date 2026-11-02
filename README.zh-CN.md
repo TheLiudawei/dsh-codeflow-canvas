@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
+  <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
@@ -174,16 +175,12 @@ tests/           validate / regression / e2e / undo / coupling / features / drop
 ## 开发
 
 ```bash
-# 自检（不需要 DSH 在跑）
+# 一次跑完 16 套（普通 Node 即可；DSH 不需要在跑）
+npm test
+
+# 也可以单跑——同一命令换成 DSH 二进制当运行时同样可用
+node tests/validate.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/coupling.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/features.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/drop-import.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/workspace.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/browse.mjs
 
 # 改了迁移脚本后重新生成画布（不要手改生成物）
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/port-canvas.mjs
@@ -193,6 +190,37 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 ```
 
 改 `lib/*.js` 需要重启 DSH；改 `lib/client.js` 刷新页面即可。
+
+### CI 到底覆盖了什么
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **Ubuntu / Windows / macOS 三平台**（Node 22）跑 **16 个套件**，三平台均为阻塞（红了就是失败）：
+
+| 覆盖范围 | 套件 |
+| --- | --- |
+| 结构、路由、工具、画布资产、XSS | `validate`（184 项） |
+| 逐项修复回归（B2–B9、并发、原子写） | `regression` |
+| 重导入合并、失效卡片、关闭开关的原行为 | `cards` |
+| 菜单模型、ARIA、构建期渲染、弹层几何 | `menu` |
+| 分层与静态 import 无环 | `architecture` |
+| 日志 schema、脱敏、轮转、降级 | `logging` |
+| 运行快照、LIFO、跨视图恢复 | `undo` |
+| 耦合评分确定性与持久化 | `coupling` |
+| 功能索引构建与重建稳定性 | `features` |
+| 工作区解析链 | `workspace` |
+| 只读目录浏览的条数上限与超时 | `browse` |
+| 保守导入根识别（51 组组合） | `import-shells` |
+| 日志查看器过滤/搜索/跟随/路径绑定 | `log-viewer` |
+| 文件夹与压缩包暂存、解压、重名冲突 | `drop-import` |
+| 真实 HTTP server + fetch 场景 | `e2e` |
+| 控件清单、绑定、动作审计 | `buttons` |
+
+**哪些没有自动化保障**（下面这些不会被 CI 覆盖，文档也不假装覆盖）：
+
+- **需要真实 DSH 宿主的一切**：真实会话创建、agent 实际执行、实时思考流、原生 `present` 交付、跟随系统主题。套件用的是假宿主——**契约**被测了，**集成**没有。
+- **面板 iframe 里的真实浏览器行为**：输入法组词、触控板捏合缩放、Space/Delete 按键处理、从 Finder/资源管理器原生拖入。`tests/mac/` 正是为这类问题准备的**人工诊断套件**（见其 README），需要装好的 DSH 和人来跑。
+- **交给系统工具的压缩格式**：`7z` / `rar` 只在装有对应工具时才能验证；`zip` / `tar` / `tar.gz` 由纯 Node 解析，已被覆盖。
+- **`tests/contrast.mjs`** 是被其他套件引用的模块（浅色调色板 WCAG 审计），不是独立套件。
+- **画布新鲜度**用*内容*哈希判定，不是 mtime：生成器把输入源哈希写进画布头部（清单的唯一事实来源是 `tools/canvas-sources.mjs`），`buttons` 重算比对——全新检出里过期生成物同样会被抓住。
 
 ## 与 ZCode 版的差异
 

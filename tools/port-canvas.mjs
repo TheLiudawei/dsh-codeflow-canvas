@@ -18,6 +18,11 @@ import { CANVAS_ACTIONS } from '../lib/ui/actions.js'
 import { MENU_MODEL, validateMenuModel } from '../lib/ui/menu.js'
 import { renderMenuBar } from '../lib/ui/menu-html.js'
 import { fitPopover } from '../lib/ui/fit-popover.js'
+import { canvasSourceHash, SOURCE_HASH_MARKER } from './canvas-sources.mjs'
+
+/* 输入源哈希写进头部注释：生成物与源码是否同源由此逐字判定（tests/buttons.mjs），
+   不再依赖 mtime——全新检出里时间戳不具信息量。 */
+const SOURCE_HASH = canvasSourceHash()
 
 const SRC = fileURLToPath(new URL('upstream/canvas-template.html', import.meta.url))
 const OUT = fileURLToPath(new URL('../assets/canvas/canvas.html', import.meta.url))
@@ -57,6 +62,7 @@ text = replaceRange(text, '<!--', '-->', `<!--
   本文件由 tools/port-canvas.mjs 从 ZCode 版 canvas-template.html 生成，
   只改动了与宿主的接线（数据来源、消息通道、图标、高度），编辑器行为保持不变。
   请勿手工修改：改上游模板或改本脚本，然后重新生成。
+  ${SOURCE_HASH_MARKER}${SOURCE_HASH}（输入清单见 tools/canvas-sources.mjs；tests/buttons.mjs 逐字校验，勿手改）
 `, 'header comment')
 
 /* ----------------------------------------------------- toolbar rebuild --- */

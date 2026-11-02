@@ -4,6 +4,12 @@ name: CI
 # DSH ships for. The plugin has no npm dependencies and no build step, so the
 # only requirement is a Node runtime — the suites import node:* builtins and
 # this repository's own modules, never the DSH host.
+#
+# 16 of the 18 suites run here. The two that do not:
+#   tests/mac/     macOS field diagnostics — a manual kit that needs an
+#                  installed DSH and a real desktop session (see its README)
+#   contrast.mjs   a module imported by validate/menu, not a standalone suite
+# tests/_log-off.mjs is a side-effect helper imported by other suites.
 
 on:
   push:
@@ -66,3 +72,47 @@ jobs:
       - name: architecture — layering and acyclic static imports
         shell: bash
         run: node tests/architecture.mjs
+
+      - name: logging — JSONL schema, redaction, rotation, degrade path
+        shell: bash
+        run: node tests/logging.mjs
+
+      - name: undo — snapshot/restore, LIFO, cross-view
+        shell: bash
+        run: node tests/undo.mjs
+
+      - name: coupling — deterministic scoring, thresholds, persistence
+        shell: bash
+        run: node tests/coupling.mjs
+
+      - name: features — index build, manual section, rebuild stability
+        shell: bash
+        run: node tests/features.mjs
+
+      - name: workspace — registration chain, longest-prefix resolution
+        shell: bash
+        run: node tests/workspace.mjs
+
+      - name: browse — read-only directory listing, caps, timeouts
+        shell: bash
+        run: node tests/browse.mjs
+
+      - name: import-shells — conservative root detection (51 combos)
+        shell: bash
+        run: node tests/import-shells.mjs
+
+      - name: log-viewer — filter, search, tail-follow, path binding
+        shell: bash
+        run: node tests/log-viewer.mjs
+
+      - name: drop-import — folder/archive staging, extraction, collisions
+        shell: bash
+        run: node tests/drop-import.mjs
+
+      - name: e2e — real http server and fetch scenarios
+        shell: bash
+        run: node tests/e2e.mjs
+
+      - name: buttons — control manifest, bindings, action audit
+        shell: bash
+        run: node tests/buttons.mjs

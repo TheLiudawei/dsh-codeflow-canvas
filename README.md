@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
+  <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
@@ -174,16 +175,12 @@ tests/                    validate / regression / e2e / undo / coupling / featur
 ## Development
 
 ```bash
-# Self-checks (DSH does not need to be running)
+# All 16 suites, in one go (plain Node; DSH does not need to be running)
+npm test
+
+# Or one at a time — the same command works with the DSH binary as the runtime
+node tests/validate.mjs
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/validate.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/regression.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/e2e.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/undo.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/coupling.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/features.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/drop-import.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/workspace.mjs
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tests/browse.mjs
 
 # Regenerate the canvas after editing the port script (never hand-edit the output)
 ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/port-canvas.mjs
@@ -193,6 +190,37 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 ```
 
 Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a page refresh.
+
+### What CI actually covers
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **16 suites on Ubuntu, Windows and macOS** (Node 22), blocking on all three. Between them:
+
+| Area | Suite |
+| --- | --- |
+| Structure, routes, tools, canvas asset, XSS | `validate` (184 checks) |
+| Per-fix regressions (B2–B9, concurrency, atomic writes) | `regression` |
+| Re-import merge, stale cards, opt-out path | `cards` |
+| Menu model, ARIA, build-time render, popover geometry | `menu` |
+| Layering and acyclic static imports | `architecture` |
+| Log schema, redaction, rotation, degrade path | `logging` |
+| Run snapshots, LIFO, cross-view restore | `undo` |
+| Coupling score determinism and persistence | `coupling` |
+| Feature index build and rebuild stability | `features` |
+| Workspace resolution chain | `workspace` |
+| Read-only directory listing caps and timeouts | `browse` |
+| Conservative import-root detection (51 combos) | `import-shells` |
+| Log viewer filter/search/follow/path binding | `log-viewer` |
+| Folder/archive staging, extraction, collisions | `drop-import` |
+| Real HTTP server + fetch scenarios | `e2e` |
+| Control manifest, bindings, action audit | `buttons` |
+
+**What is *not* automated** — and is not claimed to be:
+
+- **Anything needing a running DSH host**: real session creation, actual agent execution, live reasoning streams, native `present` delivery, theme following the OS. The suites use fake hosts; the contract is tested, the integration is not.
+- **Real browser behaviour in the panel iframe**: IME composition, trackpad pinch-zoom, the Space/Delete keydown handlers, native drag-and-drop from Finder/Explorer. `tests/mac/` is a **manual diagnostic kit** for exactly this (see its README) — it needs an installed DSH and a human.
+- **Archive formats delegated to system tools**: `7z` and `rar` are only exercised where the tool exists; `zip`/`tar`/`tar.gz` are parsed in pure Node and are covered.
+- **`tests/contrast.mjs`** is a module imported by other suites (WCAG audit of the light palette), not a standalone suite.
+- **Canvas freshness** is a *content* hash, not mtime: the generator stamps the hash of its inputs into the canvas header (`tools/canvas-sources.mjs` is the single list) and `buttons` recomputes it, so a stale artifact is caught in a fresh checkout too.
 
 ## Differences from the ZCode version
 

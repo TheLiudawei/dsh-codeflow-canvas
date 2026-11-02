@@ -157,10 +157,21 @@ const ok = (name) => { passed += 1; console.log('  ok ', name) }
     assert.ok(fit.top + fit.maxHeight <= 120 - 8, `翻上方后仍在界内：top=${fit.top} h=${fit.maxHeight}`)
     assert.ok(fit.maxHeight >= 96, '至少保留约 3 行可滚高度')
   }
-  /* 极矮 stage（<320）：列表至少 3 行高度可滚。 */
+  /* 极矮 stage（100px，内高 84 < minListHeight 96）：列表必须跟着矮下去，
+     而不是硬撑 96 把底部顶出 stage。stageH=200 时内高 184 > 96，走不到这条边界。 */
+  {
+    const stageH = 100
+    const pad = 8
+    const innerH = stageH - 2 * pad
+    const fit = fitPopover({ stageW: 800, stageH, anchorRect: { left: 10, top: 90, right: 210, bottom: 100 }, popW: 300, popH: 5000, minListHeight: 96 })
+    assert.ok(fit.maxHeight <= innerH, `极矮 stage 不高过可用高度：maxHeight=${fit.maxHeight} innerH=${innerH}`)
+    assert.ok(fit.maxHeight > 0, `极矮 stage 仍保留可滚高度：${fit.maxHeight}`)
+    assert.ok(fit.top >= pad && fit.top + fit.maxHeight <= stageH, `仍完整落在 stage 内：top=${fit.top} bottom=${fit.top + fit.maxHeight}`)
+  }
+  /* 高度够时仍然守最低 3 行。 */
   {
     const fit = fitPopover({ stageW: 800, stageH: 200, anchorRect: { left: 10, top: 90, right: 210, bottom: 100 }, popW: 300, popH: 5000, minListHeight: 96 })
-    assert.ok(fit.maxHeight >= 96, `极矮 stage 保留最小高度：${fit.maxHeight}`)
+    assert.ok(fit.maxHeight >= 96, `高度足够时保留最小高度：${fit.maxHeight}`)
     assert.ok(fit.top >= 8 && fit.top + fit.maxHeight <= 200, '仍完整落在 stage 内')
   }
   /* 水平翻转：右侧放不下 → 锚点左侧。 */

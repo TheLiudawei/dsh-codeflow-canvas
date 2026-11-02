@@ -29,6 +29,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { CANVAS_ACTIONS, ENABLE_MARKERS } from '../lib/ui/actions.js'
+import { canvasSourceHash, readSourceHash } from '../tools/canvas-sources.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 // LF 归一：Windows 检出是 CRLF，而断言里有多处跨行原文标记。
@@ -66,23 +67,20 @@ const corpus = canvas
 /* ------------------------------------------------------- 0. 生成物新鲜度 --- */
 
 {
-  const canvasStat = await stat(path.join(ROOT, 'assets/canvas/canvas.html'))
-  const stale = []
-  for (const rel of ['tools/port-canvas.mjs', 'tools/upstream/canvas-template.html', 'lib/ui/actions.js',
-    'lib/ui/menu.js', 'lib/ui/menu-html.js', 'lib/ui/fit-popover.js',
-    'tools/patches/coupling-ui.js', 'tools/patches/drop-ui.js', 'tools/patches/browse-ui.js',
-    'tools/patches/features-ui.js', 'tools/patches/log-ui.js', 'tools/patches/menu-ui.js', 'tools/patches/menu-ui.css', 'tools/patches/cards-ui.js', 'tools/patches/logview-ui.js', 'tools/patches/logview-ui.css', 'tools/theme-light.css']) {
-    try {
-      const info = await stat(path.join(ROOT, rel))
-      if (info.mtimeMs > canvasStat.mtimeMs) stale.push(rel)
-    } catch { /* 补丁文件可能尚不存在（log-ui.js 在接入前）——跳过 */ }
-  }
-  if (stale.length > 0) {
+  /* 源哈希比对（v1.3.1）：生成器把输入源哈希写进画布头部，这里重算并逐字比。
+     不用 mtime——全新检出里 git 按目录顺序写文件，canvas.html 恒比补丁目录旧。 */
+  const expected = canvasSourceHash()
+  const stamped = readSourceHash(canvas)
+  if (stamped === null) {
     finding('stale-canvas', null,
-      `生成物比源码旧：${stale.join('、')}`,
+      '生成物头部没有源哈希标记（旧版生成物或用别的方式生成）',
+      '先运行 ELECTRON_RUN_AS_NODE=1 <DSH.exe> tools/port-canvas.mjs 重新生成画布')
+  } else if (stamped !== expected) {
+    finding('stale-canvas', null,
+      `生成物与源码不同源：画布记录 ${stamped}，当前源码 ${expected}`,
       '先运行 ELECTRON_RUN_AS_NODE=1 <DSH.exe> tools/port-canvas.mjs 重新生成画布，再跑本审计')
   } else {
-    ok('生成物新鲜：canvas.html 不旧于任何补丁/清单/生成器')
+    ok(`生成物与源码同源（源哈希 ${expected}）`)
   }
 }
 
