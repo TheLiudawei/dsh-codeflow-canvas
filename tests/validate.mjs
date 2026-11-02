@@ -25,7 +25,9 @@ import { auditLightContrast, summarizeContrast } from './contrast.mjs'
 import './_log-off.mjs'
 
 const ROOT = new URL('..', import.meta.url)
-const read = (rel) => readFile(fileURLToPath(new URL(rel, ROOT)), 'utf8')
+// 统一成 LF 再断言：Windows 上 git 检出会写成 CRLF，而检查里的标记大量是
+// 跨行原文（`importProject({\n  path:...`），不归一化就只在 LF 工作副本上通过。
+const read = (rel) => readFile(fileURLToPath(new URL(rel, ROOT)), 'utf8').then((text) => text.replace(/\r\n/g, '\n'))
 
 const failures = []
 let checks = 0

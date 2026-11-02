@@ -18,7 +18,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const pluginRoot = fileURLToPath(new URL('..', import.meta.url))
-const read = (rel) => readFile(path.join(pluginRoot, rel), 'utf8')
+// LF 归一：Windows 检出是 CRLF，而断言里有多处跨行原文标记。
+const read = (rel) => readFile(path.join(pluginRoot, rel), 'utf8').then((text) => text.replace(/\r\n/g, '\n'))
 const load = (rel) => import(pathToFileURL(path.join(pluginRoot, rel)).href)
 
 const { MENU_MODEL, validateMenuModel } = await load('lib/ui/menu.js')

@@ -31,7 +31,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { CANVAS_ACTIONS, ENABLE_MARKERS } from '../lib/ui/actions.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
-const read = (rel) => readFile(path.join(ROOT, rel), 'utf8')
+// LF 归一：Windows 检出是 CRLF，而断言里有多处跨行原文标记。
+const read = (rel) => readFile(path.join(ROOT, rel), 'utf8').then((text) => text.replace(/\r\n/g, '\n'))
 
 let passed = 0
 const ok = (name) => { passed += 1; console.log('  ok ', name) }

@@ -48,7 +48,6 @@ const node = (over = {}) => ({
   assert.equal(cardKeyOf(node({ params: { instruction: 'FIXME 处理空输入' } })), `task:edit:marker:FIXME:${hashKey('FIXME 处理空输入')}`, '标记锚点')
   assert.equal(cardKeyOf(node({ params: { path: 'src\\auth.py', instruction: '' } })), 'task:edit:src/auth.py', 'params.path 锚点（分隔符归一）')
   assert.equal(cardKeyOf(node({ params: {}, title: '  修复  登录 ' })), `task:edit:title:${hashKey('修复 登录')}`, '标题哈希兜底（空白折叠）')
-  assert.equal(cardKeyOf(node({ type: 'module', params: { path: 'Src\\A.py', symbol: 'main' } }, ), undefined), undefined ?? cardKeyOf({ type: 'module', params: { path: 'Src\\A.py', symbol: 'main' } }, { platform: 'win32' }), '占位')
   assert.equal(cardKeyOf({ type: 'module', params: { path: 'Src\\A.py', symbol: 'main' } }, { platform: 'win32' }), 'module:src/a.py:main', 'module：win32 大小写不敏感 + 分隔符')
   assert.equal(cardKeyOf({ type: 'module', params: { path: 'Src/A.py', symbol: 'main' } }, { platform: 'linux' }), 'module:Src/A.py:main', 'module：POSIX 区分大小写')
   assert.equal(cardKeyOf({ type: 'scan' }), 'flow:scan')
