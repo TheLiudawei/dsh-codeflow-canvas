@@ -85,23 +85,27 @@ async function makeWorkspaceDir(prefix) {
 }
 
 console.log('\n[normalizeForCompare]')
+/* 归一化的大小写折叠**按平台**：win32 折叠、POSIX 保留。断言里带 C:\ 与 UNC 的
+   必须显式传 'win32'，否则在 Linux/macOS 上跑的是 POSIX 语义（保留大小写）而红。 */
 await check('separators, case, trailing slashes and .. are folded', () => {
-  assert.equal(normalizeForCompare('C:\\A\\B\\'), normalizeForCompare('c:/a/b'))
-  assert.equal(normalizeForCompare('C:\\A\\..\\B'), normalizeForCompare('C:/B'))
-  assert.equal(normalizeForCompare('\\\\Server\\Share\\'), '//server/share')
-  assert.equal(normalizeForCompare('/A/B/'), normalizeForCompare('/a/b'), 'POSIX folds separators but keeps case')
+  assert.equal(normalizeForCompare('C:\\A\\B\\', 'win32'), normalizeForCompare('c:/a/b', 'win32'))
+  assert.equal(normalizeForCompare('C:\\A\\..\\B', 'win32'), normalizeForCompare('C:/B', 'win32'))
+  assert.equal(normalizeForCompare('\\\\Server\\Share\\', 'win32'), '//server/share')
+  assert.notEqual(normalizeForCompare('/A/B/', 'linux'), normalizeForCompare('/a/b', 'linux'), 'POSIX folds separators but keeps case')
+  assert.equal(normalizeForCompare('/A/B/', 'win32'), normalizeForCompare('/a/b', 'win32'), 'win32 folds case too')
   assert.equal(normalizeForCompare(''), '')
   assert.equal(normalizeForCompare(undefined), '')
-  assert.equal(normalizeForCompare('/a//b'), normalizeForCompare('/a/b'))
+  assert.equal(normalizeForCompare('/a//b', 'linux'), normalizeForCompare('/a/b', 'linux'))
 })
 
 console.log('\n[isRegistered / longestRegisteredOf / sortCandidatePaths]')
 await check('registration compare is exact after normalization', () => {
-  assert.equal(isRegistered(['C:\\ws-a'], 'c:/ws-a'), true)
-  assert.equal(isRegistered([{ path: 'C:\\ws-a' }], 'c:/ws-a/'), true)
-  assert.equal(isRegistered(['C:\\ws-a'], 'C:\\ws-a\\inner'), false, 'containment is not registration')
-  assert.equal(isRegistered([], 'C:\\ws-a'), false)
-  assert.equal(isRegistered(['C:\\ws-a'], ''), false)
+  assert.equal(isRegistered(['C:\\ws-a'], 'c:/ws-a', 'win32'), true)
+  assert.equal(isRegistered([{ path: 'C:\\ws-a' }], 'c:/ws-a/', 'win32'), true)
+  assert.equal(isRegistered(['C:\\ws-a'], 'C:\\ws-a\\inner', 'win32'), false, 'containment is not registration')
+  assert.equal(isRegistered([], 'C:\\ws-a', 'win32'), false)
+  assert.equal(isRegistered(['C:\\ws-a'], '', 'win32'), false)
+  assert.equal(isRegistered(['/ws-a'], '/WS-A', 'linux'), false, 'POSIX：大小写不同就是不同目录')
 })
 await check('longest prefix wins when nested workspaces are both registered', () => {
   const registered = ['C:\\ws', 'C:\\ws\\nested']
@@ -179,7 +183,7 @@ await check('REGRESSION: two registered workspaces and no binding/session must f
   assert.equal(result.workspace, undefined)
 })
 await check('binding returns the registered canonical spelling, not the caller spelling', () => {
-  const result = pickWorkspace({ bound: 'c:/ws-a/', registered: [{ path: 'C:\\ws-a' }], registryAvailable: true })
+  const result = pickWorkspace({ bound: 'c:/ws-a/', registered: [{ path: 'C:\\ws-a' }], registryAvailable: true, platform: 'win32' })
   assert.deepEqual(result, { workspace: 'C:\\ws-a', source: 'binding' })
 })
 

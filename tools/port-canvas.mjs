@@ -24,6 +24,10 @@ import { canvasSourceHash, SOURCE_HASH_MARKER } from './canvas-sources.mjs'
    不再依赖 mtime——全新检出里时间戳不具信息量。 */
 const SOURCE_HASH = canvasSourceHash()
 
+/* 输入一律按 LF 读取：上游模板与 patch 里全是精确的换行锚点，CRLF 检出会让
+   replaceOnce 找不到锚点。.gitattributes 已统一 LF，这里是第二道保险。 */
+const readText = (file) => String(readFileSync(file, 'utf8')).split('\r\n').join('\n')
+
 const SRC = fileURLToPath(new URL('upstream/canvas-template.html', import.meta.url))
 const OUT = fileURLToPath(new URL('../assets/canvas/canvas.html', import.meta.url))
 
@@ -51,7 +55,7 @@ function replaceOnce(src, needle, replacement, label) {
   return src.slice(0, at) + replacement + src.slice(at + needle.length)
 }
 
-let text = readFileSync(SRC, 'utf8')
+let text = readText(SRC)
 
 /* ---------------------------------------------------------------- header --- */
 /* replaceRange 保留 endMarker（src.slice(end) 从 '-->' 开始），所以 replacement
@@ -2212,8 +2216,8 @@ function renderSettingsDialog(cfg){
 /* ------------------------------------------------- features (v1.1) --- */
 /* 功能分组 / 整组高亮 / 功能归属 chips：行为与样式都放在 tools/patches/ 下，
    由此处注入（上游模板保持不动）。生成天然幂等：每次都从模板重新打补丁。 */
-const FEATURES_CSS = readFileSync(new URL('patches/features-ui.css', import.meta.url), 'utf8').trim()
-const FEATURES_JS = readFileSync(new URL('patches/features-ui.js', import.meta.url), 'utf8').trim()
+const FEATURES_CSS = readText(new URL('patches/features-ui.css', import.meta.url)).trim()
+const FEATURES_JS = readText(new URL('patches/features-ui.js', import.meta.url)).trim()
 if (!FEATURES_CSS.includes('.cf-fgroup{') || !FEATURES_CSS.includes('html[data-cf-theme="light"] .cf-fgroup')) {
   throw new Error('features-ui.css: expected group rows with a light override')
 }
@@ -2225,9 +2229,9 @@ if (!FEATURES_JS.includes('function spotlightNodes(') || !FEATURES_JS.includes('
 /* 模块耦合分析（卡片/徽章/菜单/工具栏）+ 拖拽导入（遮罩/确认/进度/上传）。
    与 features 同一机制：patch 文件由本脚本注入，浅色覆盖带属性前缀，深浅
    三色（绿/黄/红）都要过 tests/contrast.mjs 的 AA 审计。 */
-const COUPLING_CSS = readFileSync(new URL('patches/coupling-ui.css', import.meta.url), 'utf8').trim()
-const COUPLING_JS = readFileSync(new URL('patches/coupling-ui.js', import.meta.url), 'utf8').trim()
-const DROP_JS = readFileSync(new URL('patches/drop-ui.js', import.meta.url), 'utf8').trim()
+const COUPLING_CSS = readText(new URL('patches/coupling-ui.css', import.meta.url)).trim()
+const COUPLING_JS = readText(new URL('patches/coupling-ui.js', import.meta.url)).trim()
+const DROP_JS = readText(new URL('patches/drop-ui.js', import.meta.url)).trim()
 if (!COUPLING_CSS.includes('.cf-coupling-card{') || !COUPLING_CSS.includes('html[data-cf-theme="light"] .cf-coupling-card')) {
   throw new Error('coupling-ui.css: expected the coupling card with a light override')
 }
@@ -2247,8 +2251,8 @@ if (!DROP_JS.includes('drop/begin') || !DROP_JS.includes('drop/finalize') || !DR
 /* ------------------------------------------------------ browse (v1.2.1) --- */
 /* 需求 C：导入目录树选择器（逐级浏览、键盘全程可操作、Esc 只关自己）。
    与 features/coupling 同一机制：patch 文件由本脚本注入，浅色覆盖带属性前缀。 */
-const BROWSE_CSS = readFileSync(new URL('patches/browse-ui.css', import.meta.url), 'utf8').trim()
-const BROWSE_JS = readFileSync(new URL('patches/browse-ui.js', import.meta.url), 'utf8').trim()
+const BROWSE_CSS = readText(new URL('patches/browse-ui.css', import.meta.url)).trim()
+const BROWSE_JS = readText(new URL('patches/browse-ui.js', import.meta.url)).trim()
 if (!BROWSE_CSS.includes('.cf-browse{') || !BROWSE_CSS.includes('html[data-cf-theme="light"] .cf-browse-card')) {
   throw new Error('browse-ui.css: expected the browse card with a light override')
 }
@@ -2263,7 +2267,7 @@ if (!BROWSE_JS.includes('/codeflow/api/browse')) {
 /* 工作与报错日志的浏览器半边：捕获阶段 click 委托 + error/rejection 钩子 +
    批量上报器（POST /codeflow/api/log）。红线：不记录表单值/路径/提示词/图
    JSON；失败静默丢弃；不重试风暴。与 features/coupling 同一注入机制。 */
-const LOG_JS = readFileSync(new URL('patches/log-ui.js', import.meta.url), 'utf8').trim()
+const LOG_JS = readText(new URL('patches/log-ui.js', import.meta.url)).trim()
 if (!LOG_JS.includes('function cflogClick(') || !LOG_JS.includes('function cflogFlush(')) {
   throw new Error('log-ui.js: expected cflogClick and cflogFlush')
 }
@@ -2276,8 +2280,8 @@ if (LOG_JS.includes('prompt(') || LOG_JS.includes('localStorage.setItem')) {
 
 /* ------------------------------------------------------- cards (v1.3.0) --- */
 /* 任务卡片持久化（需求三）画布半边：首次询问 / 失效标记 / 运行守卫 / 清理。 */
-const CARDS_CSS = readFileSync(new URL('patches/cards-ui.css', import.meta.url), 'utf8').trim()
-const CARDS_JS = readFileSync(new URL('patches/cards-ui.js', import.meta.url), 'utf8').trim()
+const CARDS_CSS = readText(new URL('patches/cards-ui.css', import.meta.url)).trim()
+const CARDS_JS = readText(new URL('patches/cards-ui.js', import.meta.url)).trim()
 if (!CARDS_CSS.includes('.cf-stale-badge{') || !CARDS_CSS.includes('html[data-cf-theme="light"] .cf-stale-badge')) {
   throw new Error('cards-ui.css: expected the stale badge with a light override')
 }
@@ -2287,8 +2291,8 @@ if (!CARDS_JS.includes('function cleanupStaleCards(') || !CARDS_JS.includes('fun
 
 /* ---------------------------------------------------- logview (v1.3.0) --- */
 /* 工作日志查看器（需求四）画布半边：级别过滤/搜索/跟随/复制/打开目录/轮询。 */
-const LOGVIEW_CSS = readFileSync(new URL('patches/logview-ui.css', import.meta.url), 'utf8').trim()
-const LOGVIEW_JS = readFileSync(new URL('patches/logview-ui.js', import.meta.url), 'utf8').trim()
+const LOGVIEW_CSS = readText(new URL('patches/logview-ui.css', import.meta.url)).trim()
+const LOGVIEW_JS = readText(new URL('patches/logview-ui.js', import.meta.url)).trim()
 if (!LOGVIEW_CSS.includes('.cf-lv-list{') || !LOGVIEW_CSS.includes('html[data-cf-theme="light"] .cf-lv-list')) {
   throw new Error('logview-ui.css: expected the log list with a light override')
 }
@@ -2302,8 +2306,8 @@ if (!LOGVIEW_JS.includes("/codeflow/api/log?tail=") || !LOGVIEW_JS.includes('log
 /* ------------------------------------------------------- menu (v1.3.0) --- */
 /* 命名菜单栏（需求一）：样式与绑定补丁。模型/渲染在 lib/ui/menu*.js（构建期
    已渲染成静态标记）；本补丁只做开关/键盘/委托/状态广播。 */
-const MENU_CSS = readFileSync(new URL('patches/menu-ui.css', import.meta.url), 'utf8').trim()
-const MENU_JS = readFileSync(new URL('patches/menu-ui.js', import.meta.url), 'utf8').trim()
+const MENU_CSS = readText(new URL('patches/menu-ui.css', import.meta.url)).trim()
+const MENU_JS = readText(new URL('patches/menu-ui.js', import.meta.url)).trim()
 if (!MENU_CSS.includes('.cf-menupop{') || !MENU_CSS.includes('html[data-cf-theme="light"] .cf-menupop')) {
   throw new Error('menu-ui.css: expected the menu popover with a light override')
 }
@@ -2320,7 +2324,7 @@ if (!MENU_JS.includes("closest('[data-action]')") || !MENU_JS.includes('closeMen
 /* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动。
    FEATURES_CSS 排在它之前：浅色作用域审计从浅色主题注释开始切片，功能样式的
    深色基线不会被误判为「未加前缀的浅色规则」。 */
-const LIGHT_CSS = readFileSync(new URL('theme-light.css', import.meta.url), 'utf8').trim()
+const LIGHT_CSS = readText(new URL('theme-light.css', import.meta.url)).trim()
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
   throw new Error('theme-light.css: expected the light variable block')
 }
