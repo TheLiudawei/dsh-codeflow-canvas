@@ -157,3 +157,9 @@ jobs:
         if: always()
         shell: bash
         run: node tests/release.mjs
+
+      - name: bench — measured import cost, determinism and undo fidelity
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
+        shell: bash
+        run: node tests/bench.mjs

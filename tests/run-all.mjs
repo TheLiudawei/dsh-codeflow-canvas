@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 export const SUITES = [
   'validate', 'regression', 'cards', 'menu', 'architecture', 'logging',
   'undo', 'coupling', 'features', 'workspace', 'browse', 'import-shells',
-  'log-viewer', 'drop-import', 'e2e', 'buttons', 'release',
+  'log-viewer', 'drop-import', 'e2e', 'buttons', 'release', 'bench',
 ]
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))

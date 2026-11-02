@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.4.1-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.4.2-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -55,6 +55,29 @@ CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一
 
 **3 · 绿灯是有含义的。** prompt 入队时节点才变 `running`，只有 agent 真回报了才到 `done`。回合结束仍无进度 → 宿主标 `failed`（"agent 未执行该节点"）并给一键重试。**绝不从 agent 的说法推断结果。** → `lib/gestures.js`（乐观置 `running`）、`lib/index.js`（回合结束对账）、`lib/activity.js`
 
+## 实测，不是口号
+
+`npm run bench` 用一份固定的合成夹具（60 个模块、13.9 KB）跑**真实的导入命令**与**真实的撤销管理器**，输出下表。夹具由纯函数生成——同一份文件、同样的内容，在任何机器上都一样——而且只要确定性或撤销不再成立，这次运行就会**失败**，所以这些数字不会悄悄烂掉。
+
+| 实测项 | 数值 |
+| --- | --- |
+| 导入（冷 / 热） | ≈90 ms / ≈70 ms（多次运行 65–120 ms） |
+| 导入期间唤醒 agent 次数 | 0 |
+| 导入消耗的 prompt token | 0 |
+| 产出的任务 / 模块节点数 | 9 / 39 |
+| 由 TODO / FIXME / HACK 生成的任务 | 5 |
+| 两次独立导入的分析字段一致数 | 48 / 48 |
+| 撤销校验（逐字节还原、新增文件移除、报告准确） | 4 / 4 |
+
+绝对耗时来自作者机器，你的会不同；**两个 0 和一致计数不会**。
+
+作为对照：在对话里写计划，模型至少要先读完源码才能开始——这里是 13.9 KB，**约 3.5k token（chars/4 估算）**。这一行是估算，并已明确标注；表里其余每一行都是实测。复现：`npm run bench`（加 `--json` 输出机器可读格式）。
+
+## 1.4.2 变更
+
+- **对比表现在有实测数字了。** `tests/bench.mjs`（`npm run bench`）把一份固定的 60 模块夹具喂给**真实的 `/flow-import` 命令**与**真实的撤销管理器**，输出导入耗时、agent 唤醒次数、prompt token、产出的任务/模块数、两次导入的一致性与撤销保真度。只要确定性或撤销不再成立，它就返回非零退出码——所以这张表不会悄悄过期。
+- **它刻意不测什么：** 模型在对话里写同样的计划会花多少 token。这里没人测过，所以 README 只给出一个**标明来源的下界**（源码字节 / 4），而不是编一个节省百分比。
+
 ## 1.4.1 变更
 
 只动文档，没有代码变更。
@@ -85,11 +108,11 @@ CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一
 
 没有新功能——这一版让测试套件在**别人的机器上**也可信。
 
-- **CI 三平台跑 17 个套件。** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22，全部阻塞。每个步骤都带 `if: always()`：一个套件红了其余照跑，一轮就能看全貌。
+- **CI 三平台跑 18 个套件。** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22，全部阻塞。每个步骤都带 `if: always()`：一个套件红了其余照跑，一轮就能看全貌。
 - **修了一个真实的几何 bug。** `fit-popover` 的最小高度写成 `Math.min(minListHeight, Math.max(minListHeight, innerH))`——恒等于 `minListHeight`，极矮 stage 下仍然要 96px，把列表顶出下边界。现在改为 `Math.min(minListHeight, innerH)`，并在分支后把 `maxHeight` 夹到可用高度；对应测试也真正触达该边界（stage 100px、内高 84px）。
 - **测试不再依赖检出方式。** 以 `\n` 为锚点的断言在 CRLF 检出下失效（`.gitattributes` 已统一 LF，共享 `read()` 也做归一）；一条只在 Windows 成立的断言删除，改为显式的 win32 / POSIX 两条；四条 `/flow-import` 检查原先靠 `%TEMP%` 里的残留目录才通过，已 hermetic 化；workspace 与 browse 套件里的 Windows 路径断言改为显式传平台。修复了 [#2](https://github.com/TheLiudawei/dsh-codeflow-canvas/issues/2) 报告的两项失败。
 - **画布新鲜度改用内容哈希。** 生成器把输入源哈希写进画布头部（`tools/canvas-sources.mjs` 是唯一清单），按钮审计重算比对——mtime 在全新检出里根本不成立。
-- **`npm test`** 一次跑完 17 个套件。
+- **`npm test`** 一次跑完 18 个套件。
 
 ## 1.3.0 变更
 
@@ -249,7 +272,7 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 
 ### CI 到底覆盖了什么
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **Ubuntu / Windows / macOS 三平台**（Node 22）跑 **17 个套件**，三平台均为阻塞（红了就是失败）：
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **Ubuntu / Windows / macOS 三平台**（Node 22）跑 **18 个套件**，三平台均为阻塞（红了就是失败）：
 
 | 覆盖范围 | 套件 |
 | --- | --- |
@@ -270,6 +293,7 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 | 真实 HTTP server + fetch 场景 | `e2e` |
 | 控件清单、绑定、动作审计 | `buttons` |
 | 版本纪律：`package.json` 领先最近标签 | `release` |
+| 实测基准：导入成本、确定性、撤销保真 | `bench` |
 
 **哪些没有自动化保障**（下面这些不会被 CI 覆盖，文档也不假装覆盖）：
 
