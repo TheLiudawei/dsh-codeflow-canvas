@@ -9,6 +9,13 @@
 var CARDS={persist:false,asked:false};
 
 function isStaleCard(n){return !!(n&&n.meta&&n.meta.cf&&n.meta.cf.stale===true);}
+/* 参数漂移：只在「仍待运行」时提示——重跑后状态变成 running/done，徽章自然消失，
+   不会出现「刚跑完还写着需重跑」的自相矛盾。 */
+function isDriftCard(n){
+  var cf=n&&n.meta&&n.meta.cf;
+  if(!cf||cf.paramsDrift!==true||cf.stale===true)return false;
+  return n.status===undefined||n.status==='pending';
+}
 function staleCardCount(){var n=0;for(var i=0;i<G.nodes.length;i++){if(isStaleCard(G.nodes[i]))n++;}return n;}
 
 /* 状态广播：清理动作的可用性 + 失效标记重绘。 */
@@ -25,7 +32,9 @@ function applyStaleMarks(){
     var el=nodeEls[n.id];
     if(!el)continue;
     var stale=isStaleCard(n);
+    var drift=isDriftCard(n);
     el.classList.toggle('cf-stale-card',stale);
+    el.classList.toggle('cf-drift-card',drift);
     var head=el.querySelector('.cf-node-head');
     var badge=head?head.querySelector('.cf-stale-badge'):null;
     if(stale&&head){
@@ -38,6 +47,19 @@ function applyStaleMarks(){
       badge.title='失效卡片：重新导入时源码里已没有对应项；不参与「运行全部」。可在「项目」菜单清理。';
     }else if(badge&&badge.parentNode){
       badge.parentNode.removeChild(badge);
+    }
+    /* v1.3.1：参数漂移（源码已变）——状态已退回待运行，这里给出原因。 */
+    var driftBadge=head?head.querySelector('.cf-drift-badge'):null;
+    if(drift&&head){
+      if(!driftBadge){
+        driftBadge=document.createElement('span');
+        driftBadge.className='cf-drift-badge';
+        head.appendChild(driftBadge);
+      }
+      driftBadge.textContent='源码已变，需重跑';
+      driftBadge.title='该卡片的源文件在重新导入后发生了变化，之前的运行结果已过期；已退回「待运行」，可重新运行。';
+    }else if(driftBadge&&driftBadge.parentNode){
+      driftBadge.parentNode.removeChild(driftBadge);
     }
   }
 }

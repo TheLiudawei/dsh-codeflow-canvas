@@ -59,6 +59,35 @@ const node = (over = {}) => ({
   ok('cardKeyOf：锚点/归一化/持久化 key 规则')
 }
 
+/* --------------------------------- 1b. 锚点只认「像路径」的 token（v1.3.1） --- */
+{
+  // 平台必须显式传：win32 折叠大小写、POSIX 保留，否则断言随宿主机漂移。
+  const anchor = (instruction, platform = 'linux') => cardKeyOf(node({ params: { instruction } }), { platform })
+
+  /* 五条反例：旧实现在这里全都把「带小数点」的片段当成了文件。 */
+  const counterexamples = [
+    ['详见 https://example.com/readme.md 的说明', 'URL（scheme://）不得当路径'],
+    ['升级到 v1.2.3 版本', '版本号不得当路径'],
+    ['耗时 3.5 秒', '纯数字不得当路径'],
+    ['e.g. 把参数改成可选', '缩写不得当路径'],
+    ['2026-11-02T04:17:03.526Z 的日志', '时间戳不得当路径'],
+  ]
+  for (const [instruction, why] of counterexamples) {
+    const got = anchor(instruction)
+    assert.ok(got.startsWith('task:edit:title:'), `${why}：实际得到 ${got}`)
+  }
+
+  /* 仍然认的正例：路径形状 / 白名单扩展名 / 带行号 / Windows 分隔符。 */
+  assert.equal(anchor('src/auth.py:12 修复空指针'), 'task:edit:src/auth.py:12', '相对路径 + 行号')
+  assert.equal(anchor('修复 a.ts 的空值'), 'task:edit:a.ts', '白名单扩展名（单文件名）')
+  assert.equal(anchor('处理 C:\\proj\\main.go 的并发'), 'task:edit:C:/proj/main.go', 'Windows 分隔符归一（POSIX 保留大小写）')
+  assert.equal(anchor('改一下 docs/README 的目录页'), 'task:edit:docs/README', '含分隔符即算路径（无扩展名）')
+  assert.equal(anchor('见 config/settings.yaml'), 'task:edit:config/settings.yaml', 'yaml 在白名单内')
+  assert.equal(anchor('参见 https://example.com/x/y.md 与 src/x.ts'), 'task:edit:src/x.ts', '跳过 URL，取真正的路径')
+  assert.equal(anchor('修正 Src/Auth.py 的校验', 'win32'), 'task:edit:src/auth.py', 'win32 折叠大小写')
+  ok('sourceAnchorOf：路径形状 + 扩展名白名单，排除 scheme/版本号/数字/缩写/时间戳')
+}
+
 /* --------------------------------------------------------- 2. mergeCards - */
 {
   /* 完全相同 → 全匹配，字段保留。 */
@@ -141,6 +170,18 @@ const node = (over = {}) => ({
   assert.equal(r.graph.nodes[0].params.instruction, 'src/auth.py:12 修复空指针', '保留用户现有 params')
   assert.equal(r.graph.nodes[0].meta.cf.paramsDrift, true)
   assert.equal(r.graph.nodes[0].meta.cf.importedParamsHash, hashKey('{"instruction":"src/auth.py:40 修复空指针"}'), '导入快照取自新扫描')
+  /* v1.3.1：源码变了，旧的「完成」不再可信 → 退回 pending，并在 detail 说明原因。
+     与「未执行即失败」同一口径：不拿过期结果冒充当前状态。 */
+  assert.equal(r.graph.nodes[0].status, 'pending', 'drift 且原本 done → 退回 pending')
+  assert.ok(String(r.graph.nodes[0].detail ?? '').includes('源码已变，需重跑'), r.graph.nodes[0].detail)
+  /* 没有 drift 时不得降级（否则每次导入都在白跑）。 */
+  const sameParams = mergeCards({
+    existingGraph: { nodes: [node({ id: 'a', status: 'done', meta: { cf: { key: 'task:edit:src/auth.py:12', importedTitle: '修复登录', importedParamsHash: oldHash } } })], links: [], meta: {} },
+    importedGraph: { nodes: [node({ id: 'n1', params: { instruction: 'src/auth.py:12 修复空指针' } })], links: [], meta: {} },
+    now,
+  })
+  assert.equal(sameParams.stats.paramsDrift, 0, '参数未变 → 不 drift')
+  assert.equal(sameParams.graph.nodes[0].status, 'done', '无 drift 时保留 done')
   /* 用户改过 params（旧 params ≠ 旧导入哈希）→ 同样保留用户值。 */
   const modified = mergeCards({
     existingGraph: { nodes: [node({ id: 'a', params: { instruction: '我手改的指令' }, meta: { cf: { key: 'task:edit:src/auth.py:12', importedTitle: '修复登录', importedParamsHash: oldHash } } })], links: [], meta: {} },

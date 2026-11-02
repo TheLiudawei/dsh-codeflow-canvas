@@ -3,7 +3,7 @@
   本文件由 tools/port-canvas.mjs 从 ZCode 版 canvas-template.html 生成，
   只改动了与宿主的接线（数据来源、消息通道、图标、高度），编辑器行为保持不变。
   请勿手工修改：改上游模板或改本脚本，然后重新生成。
-  源哈希：271bacc89fddca6a（输入清单见 tools/canvas-sources.mjs；tests/buttons.mjs 逐字校验，勿手改）
+  源哈希：522ad82d0327606a（输入清单见 tools/canvas-sources.mjs；tests/buttons.mjs 逐字校验，勿手改）
 -->
 <div id="codeflow-canvas" aria-label="CodeFlow 工作流画布">
   <div class="cf-tb">
@@ -592,6 +592,16 @@ html[data-cf-theme="light"] .cf-menusep{background:#e3e6f0;}
 
 /* 浅色覆盖 */
 html[data-cf-theme="light"] .cf-stale-badge{border-color:rgba(100,116,139,.5);color:#64748b;}
+
+/* ================= v1.3.1：参数漂移标记（源码已变，需重跑） =================
+ * 与失效卡片区分：卡片本身仍在源码里，只是结果过期——用琥珀色而不是灰虚线，
+ * 也不降透明度（它仍然可运行、需要被注意到）。 */
+.cf-drift-badge{font-size:9.5px;padding:0 6px;border-radius:8px;border:1px solid rgba(234,179,8,.55);color:#eab308;flex:0 0 auto;white-space:nowrap;}
+.cf-node.cf-drift-card .cf-node-head{border-color:rgba(234,179,8,.55);}
+
+/* 浅色覆盖 */
+html[data-cf-theme="light"] .cf-drift-badge{border-color:rgba(161,98,7,.5);color:#a16207;}
+html[data-cf-theme="light"] .cf-node.cf-drift-card .cf-node-head{border-color:rgba(161,98,7,.45);}
 /* ================= v1.3.0：工作日志查看器样式（深色基线） ================= */
 .cf-lv-body{display:flex;flex-direction:column;gap:6px;min-height:0;}
 .cf-lv-fileline{font-size:10.5px;color:var(--cf-dim);word-break:break-all;max-height:32px;overflow:hidden;}
@@ -5378,6 +5388,13 @@ function initMenuExtras(){
 var CARDS={persist:false,asked:false};
 
 function isStaleCard(n){return !!(n&&n.meta&&n.meta.cf&&n.meta.cf.stale===true);}
+/* 参数漂移：只在「仍待运行」时提示——重跑后状态变成 running/done，徽章自然消失，
+   不会出现「刚跑完还写着需重跑」的自相矛盾。 */
+function isDriftCard(n){
+  var cf=n&&n.meta&&n.meta.cf;
+  if(!cf||cf.paramsDrift!==true||cf.stale===true)return false;
+  return n.status===undefined||n.status==='pending';
+}
 function staleCardCount(){var n=0;for(var i=0;i<G.nodes.length;i++){if(isStaleCard(G.nodes[i]))n++;}return n;}
 
 /* 状态广播：清理动作的可用性 + 失效标记重绘。 */
@@ -5394,7 +5411,9 @@ function applyStaleMarks(){
     var el=nodeEls[n.id];
     if(!el)continue;
     var stale=isStaleCard(n);
+    var drift=isDriftCard(n);
     el.classList.toggle('cf-stale-card',stale);
+    el.classList.toggle('cf-drift-card',drift);
     var head=el.querySelector('.cf-node-head');
     var badge=head?head.querySelector('.cf-stale-badge'):null;
     if(stale&&head){
@@ -5407,6 +5426,19 @@ function applyStaleMarks(){
       badge.title='失效卡片：重新导入时源码里已没有对应项；不参与「运行全部」。可在「项目」菜单清理。';
     }else if(badge&&badge.parentNode){
       badge.parentNode.removeChild(badge);
+    }
+    /* v1.3.1：参数漂移（源码已变）——状态已退回待运行，这里给出原因。 */
+    var driftBadge=head?head.querySelector('.cf-drift-badge'):null;
+    if(drift&&head){
+      if(!driftBadge){
+        driftBadge=document.createElement('span');
+        driftBadge.className='cf-drift-badge';
+        head.appendChild(driftBadge);
+      }
+      driftBadge.textContent='源码已变，需重跑';
+      driftBadge.title='该卡片的源文件在重新导入后发生了变化，之前的运行结果已过期；已退回「待运行」，可重新运行。';
+    }else if(driftBadge&&driftBadge.parentNode){
+      driftBadge.parentNode.removeChild(driftBadge);
     }
   }
 }

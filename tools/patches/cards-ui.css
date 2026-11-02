@@ -6,3 +6,13 @@
 
 /* 浅色覆盖 */
 html[data-cf-theme="light"] .cf-stale-badge{border-color:rgba(100,116,139,.5);color:#64748b;}
+
+/* ================= v1.3.1：参数漂移标记（源码已变，需重跑） =================
+ * 与失效卡片区分：卡片本身仍在源码里，只是结果过期——用琥珀色而不是灰虚线，
+ * 也不降透明度（它仍然可运行、需要被注意到）。 */
+.cf-drift-badge{font-size:9.5px;padding:0 6px;border-radius:8px;border:1px solid rgba(234,179,8,.55);color:#eab308;flex:0 0 auto;white-space:nowrap;}
+.cf-node.cf-drift-card .cf-node-head{border-color:rgba(234,179,8,.55);}
+
+/* 浅色覆盖 */
+html[data-cf-theme="light"] .cf-drift-badge{border-color:rgba(161,98,7,.5);color:#a16207;}
+html[data-cf-theme="light"] .cf-node.cf-drift-card .cf-node-head{border-color:rgba(161,98,7,.45);}
