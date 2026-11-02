@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.3.2-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.4.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -37,6 +37,15 @@ It is a DSH (DeepSeek Harness) plugin, ported from the ZCode plugin `codeflow-ca
 - **Import costs nothing.** Scans, symbol extraction, coupling scores and feature mapping are all deterministic, local computation — no model call, no network, no npm dependency.
 - **Nothing is faked.** A node only turns green when the agent actually ran something and reported it back; an unexecuted node is reconciled to `failed`, not left spinning.
 
+## What changed in 1.4.0
+
+A visible change to the product's face — which is exactly why it gets its own version.
+
+- **The glyph is gone; CodeFlow has a mark.** The sidebar icon, the toolbar logo and the empty state used to draw `⬡`, a text glyph that rendered differently on every platform. They now share one vector mark — a hex canvas cut by the flow channel — drawn inline by `tools/port-canvas.mjs` (toolbar 17px, empty state 46px) and in `currentColor` for the sidebar so the shell still decides hover and selected tints.
+- **`assets/branding/` is the source of truth**: `logo.svg` (colour), `logo-on-light.svg`, `logo-mono.svg` (currentColor) and PNGs at 32/64/128/256/512 for stores, docs and social cards.
+- **Both READMEs lead with the mark**, and `docs/images/social-preview.png` (1280×640) is ready for the repository's social card.
+- **Version discipline is now enforced.** `tests/release.mjs` fails when `package.json` does not run ahead of the latest tag while there are unreleased commits — the exact situation that left a `feat` commit sitting past `v1.3.2`. It runs in CI (which now checks out with `fetch-depth: 0`) and in `npm test`.
+
 ## What changed in 1.3.2
 
 Card identity got stricter, and two defects the CI matrix caught are fixed.
@@ -51,11 +60,11 @@ Card identity got stricter, and two defects the CI matrix caught are fixed.
 
 No feature changes — this release makes the suite trustworthy on machines that are not the author's.
 
-- **CI runs 16 suites on three platforms.** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22, all blocking. Every step carries `if: always()`, so one failing suite still lets the rest report — a single run shows the whole picture.
+- **CI runs 17 suites on three platforms.** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22, all blocking. Every step carries `if: always()`, so one failing suite still lets the rest report — a single run shows the whole picture.
 - **Fixed a real geometry bug.** `fit-popover` computed its minimum height as `Math.min(minListHeight, Math.max(minListHeight, innerH))` — identically `minListHeight` — so a short stage still demanded 96px and pushed the list past the bottom edge. It is now `Math.min(minListHeight, innerH)`, with `maxHeight` clamped to the available height; the test for that boundary actually exercises it (stage 100px, inner height 84px).
 - **The tests no longer depend on the checkout.** `\n`-anchored assertions broke on CRLF checkouts (`.gitattributes` now pins LF, and the shared `read()` normalises); one assertion only held on Windows and was removed in favour of the explicit win32/POSIX pair; four `/flow-import` checks were passing only because a stale directory happened to exist in `%TEMP%`; Windows-path assertions in the workspace and browse suites now pass an explicit platform. Closes the failures reported in [#2](https://github.com/TheLiudawei/dsh-codeflow-canvas/issues/2).
 - **Canvas freshness is a content hash.** The generator stamps the hash of its inputs into the canvas header (`tools/canvas-sources.mjs` is the single input list) and the button audit recomputes it, instead of comparing mtimes — which cannot work in a fresh clone.
-- **`npm test`** runs all 16 suites.
+- **`npm test`** runs all 17 suites.
 
 ## What changed in 1.3.0
 
@@ -197,7 +206,7 @@ tests/                    validate / regression / e2e / undo / coupling / featur
 ## Development
 
 ```bash
-# All 16 suites, in one go (plain Node; DSH does not need to be running)
+# All 17 suites, in one go (plain Node; DSH does not need to be running)
 npm test
 
 # Or one at a time — the same command works with the DSH binary as the runtime
@@ -215,7 +224,7 @@ Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a 
 
 ### What CI actually covers
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **16 suites on Ubuntu, Windows and macOS** (Node 22), blocking on all three. Between them:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **17 suites on Ubuntu, Windows and macOS** (Node 22), blocking on all three. Between them:
 
 | Area | Suite |
 | --- | --- |
@@ -235,6 +244,7 @@ Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a 
 | Folder/archive staging, extraction, collisions | `drop-import` |
 | Real HTTP server + fetch scenarios | `e2e` |
 | Control manifest, bindings, action audit | `buttons` |
+| Version discipline: `package.json` runs ahead of the latest tag | `release` |
 
 **What is *not* automated** — and is not claimed to be:
 

@@ -41,6 +41,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tests/release.mjs 需要标签来核对版本纪律
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -148,3 +151,9 @@ jobs:
         if: always()
         shell: bash
         run: node tests/buttons.mjs
+
+      - name: release — package.json must run ahead of the latest tag
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
+        shell: bash
+        run: node tests/release.mjs
