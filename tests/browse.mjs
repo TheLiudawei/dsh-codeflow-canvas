@@ -137,14 +137,19 @@ await check('empty and junk inputs yield empty listings, not errors', () => {
 
 console.log('\n[parentOf]')
 await check('parent walks to the root and stops there', () => {
-  assert.equal(parentOf('C:\\a\\b'), 'C:\\a')
-  assert.equal(parentOf('C:\\a'), 'C:\\', 'the drive root is a browsable parent')
-  assert.equal(parentOf('C:\\'), null)
-  assert.equal(parentOf('C:\\a\\b\\'), 'C:\\a', 'trailing separators never create empty segments')
+  /* parentOf 走 node:path，即**宿主平台**的语义：反斜杠在 POSIX 上不是分隔符，
+     盘符根与 UNC 只存在于 Windows。断言按平台分组，避免在 Linux/macOS 上假失败。 */
+  if (process.platform === 'win32') {
+    assert.equal(parentOf('C:\\a\\b'), 'C:\\a')
+    assert.equal(parentOf('C:\\a'), 'C:\\', 'the drive root is a browsable parent')
+    assert.equal(parentOf('C:\\'), null)
+    assert.equal(parentOf('C:\\a\\b\\'), 'C:\\a', 'trailing separators never create empty segments')
+    assert.equal(parentOf('\\\\srv\\share\\a'), '\\\\srv\\share')
+  }
   assert.equal(parentOf('/a'), '/')
   assert.equal(parentOf('/'), null)
   assert.equal(parentOf('/a/b'), '/a')
-  assert.equal(parentOf('\\\\srv\\share\\a'), '\\\\srv\\share')
+  assert.equal(parentOf('/a/b/'), '/a', 'trailing separators never create empty segments')
   assert.equal(parentOf(''), null)
   assert.equal(parentOf(undefined), null)
   assert.equal(parentOf('a/b'), null, 'relative paths have no meaningful parent here')

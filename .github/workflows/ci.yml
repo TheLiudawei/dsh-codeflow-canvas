@@ -54,65 +54,97 @@ jobs:
           git --version
 
       - name: validate — structure, behaviour, canvas assets, XSS
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/validate.mjs
 
       - name: regression — per-fix regressions
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/regression.mjs
 
       - name: cards — re-import merge, stale cards, opt-out path
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/cards.mjs
 
       - name: menu — menu model, ARIA, build-time render, popover fit
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/menu.mjs
 
       - name: architecture — layering and acyclic static imports
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/architecture.mjs
 
       - name: logging — JSONL schema, redaction, rotation, degrade path
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/logging.mjs
 
       - name: undo — snapshot/restore, LIFO, cross-view
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/undo.mjs
 
       - name: coupling — deterministic scoring, thresholds, persistence
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/coupling.mjs
 
       - name: features — index build, manual section, rebuild stability
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/features.mjs
 
       - name: workspace — registration chain, longest-prefix resolution
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/workspace.mjs
 
       - name: browse — read-only directory listing, caps, timeouts
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/browse.mjs
 
       - name: import-shells — conservative root detection (51 combos)
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/import-shells.mjs
 
       - name: log-viewer — filter, search, tail-follow, path binding
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/log-viewer.mjs
 
       - name: drop-import — folder/archive staging, extraction, collisions
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/drop-import.mjs
 
       - name: e2e — real http server and fetch scenarios
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/e2e.mjs
 
       - name: buttons — control manifest, bindings, action audit
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
         shell: bash
         run: node tests/buttons.mjs
