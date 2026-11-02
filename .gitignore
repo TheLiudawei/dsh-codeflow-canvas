@@ -11,6 +11,11 @@ codeflow.log*
 *.zip
 *.tar
 
+# Internal agent task briefs: they embed absolute local paths (user profile,
+# DSH install location) and are working notes, not product documentation.
+# Keep them local; redact the paths before publishing one deliberately.
+docs/AGENT-PROMPT-*.md
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
