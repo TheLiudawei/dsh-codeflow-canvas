@@ -229,7 +229,26 @@ await writeFile(path.join(fixtureRoot, 'src', 'main.py'), '"""入口模块。"""
 await writeFile(path.join(fixtureRoot, 'src', 'util.js'), '// TODO: 去掉全局状态\nexport const id = (x) => x\n', 'utf8')
 await writeFile(path.join(fixtureRoot, 'src', 'service.js'), "import { id } from './util.js'\nexport function make(x){ return id(x) }\n", 'utf8')
 await writeFile(path.join(fixtureRoot, 'package.json'), '{"name":"fixture"}\n', 'utf8')
-const cleanupFixture = () => rm(fixtureRoot, { recursive: true, force: true })
+/**
+ * 删除临时目录，带重试。
+ *
+ * v1.3.2：`rm(..., {recursive:true})` 在 macOS 上偶尔抛 `ENOTEMPTY`——插件的
+ * 落盘是去抖的，清理时可能还有一笔异步写把文件刚放回去。重试几次即可，不要
+ * 让一个竞态把整轮自检标红。
+ */
+async function rmRetry(target, attempts = 6) {
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      await rm(target, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (i === attempts - 1) throw error
+      await new Promise((resolve) => setTimeout(resolve, 50 * (i + 1)))
+    }
+  }
+}
+
+const cleanupFixture = () => rmRetry(fixtureRoot)
 
 console.log('\n[manifest]')
 const pkg = JSON.parse(await read('package.json'))
@@ -453,7 +472,7 @@ console.log('\n[dual view store]')
       assert.equal(store.patchNode('dual-demo', 't1', { status: 'done' }, { view: 'modules' }), undefined, 'a wrong-view explicit target is refused, not redirected')
     })
   } finally {
-    await rm(workspace, { recursive: true, force: true })
+    await rmRetry(workspace)
   }
 }
 
@@ -558,7 +577,7 @@ await check('collapses 1–2 markers into one summary edit node', async () => {
     assert.equal(edits.length, 1, 'one summary node instead of fragmenting')
     assert.ok(edits[0].title.includes('1 条'), edits[0].title)
   } finally {
-    await rm(one, { recursive: true, force: true })
+    await rmRetry(one)
   }
 })
 await check('a taken project name gets the -flow suffix', async () => {
@@ -645,7 +664,7 @@ console.log('\n[dual import]')
         assert.ok(result.modulesWarning.length > 0, 'the warning names the reason')
         assert.ok(result.summary.includes('不可用'), result.summary)
       } finally {
-        await rm(empty, { recursive: true, force: true })
+        await rmRetry(empty)
       }
     })
     await check('the importer CLI writes both files and --modules stays a no-op alias', async () => {
@@ -671,14 +690,14 @@ console.log('\n[dual import]')
           assert.equal(modules2.meta.strategy, 'modules', '--modules no longer means modules-only')
           assert.ok(await readFile(path.join(dir2, 'workflow.json'), 'utf8').then(() => true, () => false), 'the task pipeline is still written')
         } finally {
-          await rm(out2, { recursive: true, force: true })
+          await rmRetry(out2)
         }
       } finally {
-        await rm(out, { recursive: true, force: true })
+        await rmRetry(out)
       }
     })
   } finally {
-    await rm(workspace, { recursive: true, force: true })
+    await rmRetry(workspace)
   }
 }
 
@@ -924,7 +943,7 @@ console.log('\n[view-aware tool]')
       assert.equal(modulesOnDisk.nodes[0].status, 'running', 'the modules view reached the disk too')
     })
   } finally {
-    await rm(viewWorkspace, { recursive: true, force: true })
+    await rmRetry(viewWorkspace)
   }
 }
 
@@ -1055,7 +1074,7 @@ await check('a RUN_NODE on the modules view quotes the modules graphPath and tag
     const manifest = JSON.parse(await readFile(path.join(modulesWorkspace, 'CodeFlow', 'flow-projects', 'run-mod', '.undo', undoDirs[0], 'manifest.json'), 'utf8'))
     assert.equal(manifest.view, 'modules')
   } finally {
-    await rm(modulesWorkspace, { recursive: true, force: true })
+    await rmRetry(modulesWorkspace)
   }
 })
 
@@ -1117,7 +1136,7 @@ await check('a RUN_NODE prompt is self-contained: node/upstream/cwd/expect + req
     // 响应带的是 store 的最新 rev（含乐观置 running 的那一次 bump）。
     assert.equal(state.json.rev, res.json.rev, 'the action response rev matches the store')
   } finally {
-    await rm(runWorkspace, { recursive: true, force: true })
+    await rmRetry(runWorkspace)
   }
 })
 await check('a failed delivery rolls the optimistic running back to the previous status', async () => {
@@ -1149,7 +1168,7 @@ await check('a failed delivery rolls the optimistic running back to the previous
     const t2 = state.json.graph.nodes.find((node) => node.id === 't2')
     assert.equal(t2.status, 'pending', 'the optimistic running is rolled back (never stuck spinning)')
   } finally {
-    await rm(failWorkspace, { recursive: true, force: true })
+    await rmRetry(failWorkspace)
   }
 })
 await check('RUN_ALL carries the topo order of pending/failed nodes and flips only the first one running', async () => {
@@ -1190,7 +1209,7 @@ await check('RUN_ALL carries the topo order of pending/failed nodes and flips on
     assert.equal(statuses.t1, 'done')
     assert.equal(statuses.t4, 'skipped')
   } finally {
-    await rm(allWorkspace, { recursive: true, force: true })
+    await rmRetry(allWorkspace)
   }
 })
 await check('an unbound project without a session controller is refused with an actionable error', async () => {
@@ -1266,7 +1285,7 @@ await check('POST /codeflow/api/save persists without a turn', async () => {
     assert.equal(sink.length, 0, 'save must not wake the agent')
     assert.ok(normalizePath(response.json.file).endsWith('/CodeFlow/flow-projects/web/workflow.json'), response.json.file)
   } finally {
-    await rm(saveWorkspace, { recursive: true, force: true })
+    await rmRetry(saveWorkspace)
   }
 })
 await check('POST /codeflow/api/import builds the graph host-side, no agent turn', async () => {
@@ -1352,7 +1371,7 @@ await check('NEW creates a durable starter project even with no agent session', 
       'the response names the durable project dir',
     )
   } finally {
-    await rm(newWs, { recursive: true, force: true }).catch(() => {})
+    await rmRetry(newWs).catch(() => {})
   }
 })
 await check('NEW creates the project and queues it in a fresh dedicated session', async () => {
@@ -1392,7 +1411,7 @@ await check('NEW creates the project and queues it in a fresh dedicated session'
     assert.equal(normalizePath(sidecar.workspace), normalizePath(newWs), 'the sidecar records the chosen workspace')
     assert.equal(sink.length, 0, 'agents are woken by the controller, not directly')
   } finally {
-    await rm(newWs, { recursive: true, force: true }).catch(() => {})
+    await rmRetry(newWs).catch(() => {})
   }
 })
 await check('NEW suffixes a project name that is already taken', async () => {
@@ -1414,7 +1433,7 @@ await check('NEW suffixes a project name that is already taken', async () => {
     assert.equal(response.json.project, 'host-new-flow')
     assert.ok(response.json.warning.includes('占用'), response.json.warning)
   } finally {
-    await rm(dupWs, { recursive: true, force: true }).catch(() => {})
+    await rmRetry(dupWs).catch(() => {})
   }
 })
 console.log('\n[v1.2.1 workspace addressing (Issue #1)]')
@@ -1469,7 +1488,7 @@ console.log('\n[v1.2.1 workspace addressing (Issue #1)]')
         assert.deepEqual(await snapshotOf(wsMain), beforeMain, 'the registered workspace is untouched')
         assert.deepEqual(await snapshotOf(unregistered), beforeFree, 'the unregistered directory is untouched')
       } finally {
-        await rm(unregistered, { recursive: true, force: true })
+        await rmRetry(unregistered)
       }
     })
     await check('GET /api/workspaces is read-only and exposes the listing shape', async () => {
@@ -1554,7 +1573,7 @@ console.log('\n[v1.2.1 workspace addressing (Issue #1)]')
         assert.deepEqual(after.json.entries.map((entry) => entry.name), names)
         assert.equal(await readFile(path.join(fixture, 'file.txt'), 'utf8'), 'x')
       } finally {
-        await rm(fixture, { recursive: true, force: true })
+        await rmRetry(fixture)
       }
     })
     await check('GET /api/browse maps errors: missing 404, file 400, empty 200 roots', async () => {
@@ -1576,12 +1595,12 @@ console.log('\n[v1.2.1 workspace addressing (Issue #1)]')
         assert.equal(roots.json.roots, true)
         assert.ok(Array.isArray(roots.json.entries))
       } finally {
-        await rm(someFile, { recursive: true, force: true })
+        await rmRetry(someFile)
       }
     })
   } finally {
-    await rm(wsMain, { recursive: true, force: true }).catch(() => {})
-    await rm(wsSecond, { recursive: true, force: true }).catch(() => {})
+    await rmRetry(wsMain).catch(() => {})
+    await rmRetry(wsSecond).catch(() => {})
   }
 }
 
@@ -2029,7 +2048,7 @@ await check('rebind replaces the binding and leaves the old session alone', asyn
   const sidecar = JSON.parse(await readFile(sessionSidecarPath(sidecarWorkspace, 'rebind-demo'), 'utf8'))
   assert.equal(sidecar.sessionId, second.sessionId, 'the sidecar follows the new binding')
 })
-const cleanupSessions = () => rm(sidecarWorkspace, { recursive: true, force: true })
+const cleanupSessions = () => rmRetry(sidecarWorkspace)
 
 console.log('\n[v0.5.0 activity hub]')
 {
@@ -2279,7 +2298,7 @@ await check('paths are extracted from single keys, arrays, edit lists and patch 
     hub.clear('edit-demo')
     assert.equal(hub.activity('edit-demo', {}).edits.length, 0)
   })
-  await rm(editWorkspace, { recursive: true, force: true })
+  await rmRetry(editWorkspace)
 }
 
 console.log('\n[v0.5.0 progress tool]')
@@ -2446,7 +2465,7 @@ console.log('\n[v0.5.0 undo over HTTP]')
     const { graph } = await importProject({ path: projectDir, existingNames: [] })
     assert.ok(!JSON.stringify(graph).includes('.undo'), 'the scan skips .undo entirely')
   })
-  await rm(undoWorkspace, { recursive: true, force: true })
+  await rmRetry(undoWorkspace)
 }
 
 console.log('\n[v0.5.0 canvas asset]')
@@ -2556,7 +2575,7 @@ console.log('\n[v0.5.1 load channel]')
     assert.ok(text.includes('mode="load"'), '/flow-new teaches the load channel')
     assert.ok(text.includes('不要把整图 JSON 塞进工具参数'))
   })
-  await rm(loadWorkspace, { recursive: true, force: true })
+  await rmRetry(loadWorkspace)
 }
 
 console.log('\n[v1.0 paths & config]')
@@ -2665,14 +2684,14 @@ console.log('\n[v1.0 paths & config]')
             'projectDir:null clears the override',
           )
         } finally {
-          await rm(overrideDir, { recursive: true, force: true })
+          await rmRetry(overrideDir)
         }
       } finally {
-        await rm(custom, { recursive: true, force: true })
+        await rmRetry(custom)
       }
     })
   } finally {
-    await rm(pathsWorkspace, { recursive: true, force: true })
+    await rmRetry(pathsWorkspace)
   }
 }
 
