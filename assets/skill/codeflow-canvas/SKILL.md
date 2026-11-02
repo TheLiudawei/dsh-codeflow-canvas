@@ -70,7 +70,7 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
    双视图项目默认载入任务流水线，想看模块图再加 `view:"modules"`。
    工作区一个项目都没有时，用 `mode="render"` 推一张空图
    `{"format":"codeflow/1","rev":0,"project":null,"nodes":[],"links":[],"meta":{}}`。
-2. 回一两句话：告诉用户点左侧栏的 **CodeFlow（⬡）** 图标看画布，右键空白画布可"新建项目 / 导入项目"；
+2. 回一两句话：告诉用户点左侧栏的 **CodeFlow（六边形图标）** 看画布，右键空白画布可"新建项目 / 导入项目"；
    若载入了历史项目，说明项目名与进度。
 
 用户没打开面板时工具也会成功——图已经就位，用户点开面板就能看到。

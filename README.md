@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/branding/logo.svg" width="96" height="96" alt="CodeFlow Canvas logo"></p>
+
 <h1 align="center">CodeFlow Canvas</h1>
 
 <p align="center"><b>A ComfyUI-style coding workflow canvas for DSH.<br/>Every node is a real agent task; every link is a dataflow dependency.</b></p>

@@ -74,12 +74,29 @@ text = replaceRange(text, '<!--', '-->', `<!--
    菜单标记由 lib/ui/menu-html.js 从 lib/ui/menu.js 的模型渲染（单一事实来源，
    展开态与折叠态同源）；旧的 undo / viewtabs / settings / coupling 四处
    replaceOnce 以旧按钮字符串为锚点，整段替换后锚点消失，全部并入本块。 */
+/* 品牌标识：实心六边形「画布」+ 贯穿的 Flow 流道，渐进取画布强调色 → 青色。
+   同源文件见 assets/branding/logo.svg；这里内联是因为画布文档由宿主整页注入，
+   iframe 里没有静态资源路由。每个挂载点一份唯一 id，避免同文档内 mask/渐变互串。 */
+const LOGO_HEX = 'M41 24 32.5 9.28 15.5 9.28 7 24 15.5 38.72 32.5 38.72Z'
+const LOGO_GROOVE = 'M8.5 30h10.5q4 0 4-4v-4q0-4 4-4h12.5'
+const logoMarkHtml = (className, size, key) => '<svg class="' + className + '" width="' + size + '" height="' + size
+  + '" viewBox="0 0 48 48" aria-hidden="true" focusable="false">'
+  + '<defs><linearGradient id="cfLogoGrad-' + key + '" x1="9" y1="7" x2="39" y2="41" gradientUnits="userSpaceOnUse">'
+  + '<stop offset="0" stop-color="#9C8BFF"/><stop offset=".52" stop-color="#6D7CFF"/><stop offset="1" stop-color="#22D3EE"/>'
+  + '</linearGradient><mask id="cfLogoMask-' + key + '" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">'
+  + '<rect width="48" height="48" fill="#000"/>'
+  + '<path d="' + LOGO_HEX + '" fill="#fff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>'
+  + '<path d="' + LOGO_GROOVE + '" fill="none" stroke="#000" stroke-width="4.2" stroke-linecap="round"/>'
+  + '</mask></defs>'
+  + '<path d="' + LOGO_HEX + '" fill="url(#cfLogoGrad-' + key + ')" stroke="url(#cfLogoGrad-' + key
+  + ')" stroke-width="4" stroke-linejoin="round" mask="url(#cfLogoMask-' + key + ')"/></svg>'
+
 const VIEWTABS_HTML = '<div class="cf-viewtabs" id="cf-viewtabs" role="tablist" aria-label="画布视图切换" hidden>\n'
   + '      <button type="button" class="cf-viewtab" id="cf-vtab-tasks" role="tab" aria-selected="true" tabindex="0" data-tooltip="任务流水线视图（workflow.json）"><span class="cf-vtab-name">任务流水线</span><span class="cf-vtab-count">0</span><span class="cf-vtab-dot" hidden title="该视图有模块正在被修改"></span></button>\n'
   + '      <button type="button" class="cf-viewtab" id="cf-vtab-modules" role="tab" aria-selected="false" tabindex="-1" data-tooltip="模块结构图视图（workflow.modules.json）"><span class="cf-vtab-name">模块结构图</span><span class="cf-vtab-count">0</span><span class="cf-vtab-dot" hidden title="该视图有模块正在被修改"></span></button>\n'
   + '    </div>'
 const TOOLBAR_HTML = '<div class="cf-tb">\n'
-  + '    <div class="cf-logo"><span class="cf-logo-mark">⬡</span><b>CodeFlow</b><span class="cf-logo-sub">工作流画布</span></div>\n'
+  + '    <div class="cf-logo">' + logoMarkHtml('cf-logo-mark', 17, 'tb') + '<b>CodeFlow</b><span class="cf-logo-sub">工作流画布</span></div>\n'
   + '    <nav class="cf-menubar" aria-label="CodeFlow 菜单">\n'
   + '      ' + renderMenuBar(MENU_MODEL) + '\n'
   + '    </nav>\n'
@@ -94,6 +111,33 @@ const TOOLBAR_HTML = '<div class="cf-tb">\n'
   + '    <button type="button" class="cf-tbtn cf-icononly" id="cf-tb-settings" data-action="toolbar:cf-tb-settings" data-tooltip="CodeFlow 设置：项目根目录与项目目录" aria-label="设置" hidden><i data-lucide="settings"></i></button>\n'
   + '  </div>\n  '
 text = replaceRange(text, '<div class="cf-tb">', '<div class="cf-stage"', TOOLBAR_HTML, 'toolbar rebuild (named menus)')
+
+/* ------------------------------------------------ brand mark mounts --- */
+/* 空状态大字标与工具栏同一形状、不同尺寸；CSS 只负责对齐与尺寸，颜色全部在 SVG 内。 */
+text = replaceOnce(
+  text,
+  '<div class="cf-empty-logo">⬡</div>',
+  '<div class="cf-empty-logo">' + logoMarkHtml('cf-logo-mark', 46, 'empty') + '</div>',
+  'empty-state brand mark',
+)
+text = replaceOnce(
+  text,
+  '.cf-logo{display:flex; align-items:baseline; gap:6px; margin-right:8px;}',
+  '.cf-logo{display:flex; align-items:center; gap:6px; margin-right:8px;}',
+  'logo row alignment',
+)
+text = replaceOnce(
+  text,
+  '.cf-logo-mark{color:var(--cf-accent); font-size:16px;}',
+  '.cf-logo-mark{display:block; flex:0 0 auto;}',
+  'brand mark sizing',
+)
+text = replaceOnce(
+  text,
+  '.cf-empty-logo{font-size:34px; color:var(--cf-accent);}',
+  '.cf-empty-logo{display:flex; justify-content:center;}',
+  'empty-state brand mark sizing',
+)
 
 /* ----------------------------------------- guarded toolbar bindings --- */
 /* v1.3.0：模板对每个工具栏按钮无条件 addEventListener；添加节点/整理布局/

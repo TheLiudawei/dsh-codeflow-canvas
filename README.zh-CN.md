@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/branding/logo.svg" width="96" height="96" alt="CodeFlow 工作流画布 logo"></p>
+
 <h1 align="center">CodeFlow 工作流画布</h1>
 
 <p align="center"><b>DSH 上的 ComfyUI 风格编程工作流画布。<br/>每个节点都是一个 agent 真实执行的任务，每条连线都是一条数据流依赖。</b></p>
