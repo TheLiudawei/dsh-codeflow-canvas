@@ -1,0 +1,8 @@
+/* ================= v1.3.0：失效卡片标记（深色基线） =================
+ * 不刺眼的小徽章 + 轻量降透明，不用大块红色（任务书 §6.7）。 */
+.cf-stale-badge{font-size:9.5px;padding:0 6px;border-radius:8px;border:1px dashed rgba(148,163,184,.55);color:var(--cf-dim);flex:0 0 auto;white-space:nowrap;}
+.cf-node.cf-stale-card{opacity:.62;}
+.cf-node.cf-stale-card .cf-node-head{border-style:dashed;}
+
+/* 浅色覆盖 */
+html[data-cf-theme="light"] .cf-stale-badge{border-color:rgba(100,116,139,.5);color:#64748b;}

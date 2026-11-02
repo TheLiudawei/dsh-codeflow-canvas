@@ -1,0 +1,64 @@
+/* ================= v1.3.0：命名菜单栏样式（深色基线） =================
+ * 顶栏 flex-wrap:nowrap（任何宽度不换行）+ 命名菜单面板 + 响应式折叠。
+ * 浅色覆盖在文件尾，带 html[data-cf-theme="light"] 前缀（与 features/coupling
+ * 补丁同一约定，tests/contrast.mjs 审计从浅色注释切片）。 */
+
+/* ---- 顶栏：不换行 + 可收缩 ---- */
+.cf-tb{flex-wrap:nowrap; min-width:0;}
+.cf-logo{flex:0 0 auto; min-width:0;}
+.cf-logo b{white-space:nowrap;}
+.cf-menubar{display:flex; align-items:center; gap:1px; position:relative; min-width:0; flex:0 1 auto;}
+
+/* ---- 触发按钮 ---- */
+.cf-mbtn{display:inline-flex; align-items:center; gap:4px; padding:5px 9px; border-radius:8px; border:1px solid transparent;
+  background:none; color:var(--cf-dim); font-size:12.5px; cursor:pointer; white-space:nowrap;}
+.cf-mbtn:hover{border-color:var(--cf-border2); background:#2a2a38; color:var(--cf-text);}
+.cf-mbtn[aria-expanded="true"]{border-color:rgba(124,140,255,.45); background:rgba(124,140,255,.16); color:#b9c2ff;}
+.cf-mbtn svg{opacity:.7;}
+.cf-menu-compact{display:none;}
+
+/* ---- 面板：挂在触发按钮下方，z 高于画布、低于 modal ---- */
+.cf-menu-group{position:relative; min-width:0;}
+.cf-menupop{position:absolute; top:calc(100% + 4px); left:0; z-index:34; min-width:216px;
+  background:rgba(24,24,31,.98); border:1px solid var(--cf-border2); border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55); padding:5px; display:flex; flex-direction:column;}
+.cf-menupop[hidden]{display:none;}
+.cf-menuitem{display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:7px;
+  background:none; border:none; color:var(--cf-text); font-size:12.5px; cursor:pointer; white-space:nowrap; text-align:left;}
+.cf-menuitem svg{opacity:.75; flex:0 0 auto;}
+.cf-menuitem:hover{background:rgba(124,140,255,.16);}
+.cf-menuitem:focus-visible{outline:2px solid rgba(124,140,255,.7); outline-offset:-1px;}
+.cf-menuitem[aria-disabled="true"]{opacity:.45; cursor:default;}
+.cf-menuitem[aria-disabled="true"]:hover{background:none;}
+.cf-menusep{height:1px; background:var(--cf-border); margin:4px 6px;}
+.cf-menugroup-title{font-size:10.5px; color:var(--cf-dim); padding:5px 8px 2px; white-space:nowrap;}
+
+/* ---- 折叠面板（<720px 才出现）：fixed 全宽，不依赖触发按钮定位 ---- */
+.cf-menupop-compact{position:fixed; top:50px; left:8px; right:8px; min-width:0; max-height:calc(100vh - 60px); overflow-y:auto; z-index:36;}
+
+/* ---- 主按钮文字 / 视图 tab 的响应式收缩（同一布局，只藏展示层） ---- */
+.cf-tbtn .cf-tbtn-text{white-space:nowrap;}
+.cf-vtab-name{white-space:nowrap;}
+
+@media (max-width:1099px){
+  .cf-vtab-name{display:none;}
+  .cf-logo-sub{display:none;}
+}
+@media (max-width:719px){
+  .cf-menu-group{display:none;}
+  .cf-menu-compact{display:inline-flex;}
+  .cf-tbtn .cf-tbtn-text{display:none;}
+  .cf-tbtn{padding:5px 7px;}
+}
+@media (max-width:479px){
+  #cf-tb-new,#cf-tb-import,#cf-tb-undo,#cf-tb-save{display:none;}
+}
+
+/* ================= 浅色覆盖（html[data-cf-theme="light"] 前缀） ================= */
+html[data-cf-theme="light"] .cf-mbtn:hover{background:#eceefc; color:#1f2430;}
+html[data-cf-theme="light"] .cf-mbtn[aria-expanded="true"]{background:rgba(79,91,213,.14); border-color:rgba(79,91,213,.4); color:#3742c8;}
+html[data-cf-theme="light"] .cf-menupop{background:#ffffff; border-color:#d5d9e6; box-shadow:0 10px 30px rgba(30,35,60,.18);}
+html[data-cf-theme="light"] .cf-menuitem{color:#1f2430;}
+html[data-cf-theme="light"] .cf-menuitem:hover{background:rgba(79,91,213,.12);}
+html[data-cf-theme="light"] .cf-menuitem:focus-visible{outline-color:rgba(79,91,213,.65);}
+html[data-cf-theme="light"] .cf-menusep{background:#e3e6f0;}

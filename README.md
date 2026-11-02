@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.2-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -33,6 +33,13 @@ It is a DSH (DeepSeek Harness) plugin, ported from the ZCode plugin `codeflow-ca
 - **A graph is reviewable, a transcript is not.** You see the plan, the order, and what is stuck, all at once.
 - **Import costs nothing.** Scans, symbol extraction, coupling scores and feature mapping are all deterministic, local computation — no model call, no network, no npm dependency.
 - **Nothing is faked.** A node only turns green when the agent actually ran something and reported it back; an unexecuted node is reconciled to `failed`, not left spinning.
+
+## What changed in 1.3.0
+
+- **Named menus replace the button row.** The toolbar is now `logo · 项目/运行/视图/帮助 menus · view tabs · 新建/导入/运行全部 · undo/save/settings icons` — `flex-wrap: nowrap`, no second row at any width. Menus collapse into a `☰` panel below 720px rendered **from the same model** (`lib/ui/menu.js` → `lib/ui/menu-html.js`, build-time static markup; `tools/patches/menu-ui.js` only delegates clicks to the existing handlers via one action-key table). Full keyboard support (arrows/Home/End/Esc) with `aria-haspopup`/`aria-expanded`/`role="menu"`.
+- **The secondary node list always fits.** Its position/height are derived from the stage by a pure function (`lib/ui/fit-popover.js`, inlined at build time): the list scrolls to the last row at 480px height with 200 nodes, the search box stays visible, wheel scrolling no longer chains into the canvas, and the left category bar itself scrolls.
+- **Task cards survive re-import (opt-in, off by default).** On first canvas open the panel asks once per workspace (`cards.asked` in `CodeFlow/config.json`). Enabled, re-importing the same project merges by stable card identity (`lib/cards/identity.js`): run state, result, position, renamed titles and edited params are preserved onto the freshly scanned graph; deleted tasks stay as「失效卡片」(excluded from run-all, cleanable from the 项目 menu); merge runs as a pure function (`lib/cards/merge.js`) and never blocks import. Disabled behaviour is byte-identical to 1.2.2 plus a `.bak-` backup.
+- **Read-only log viewer.** 设置 → 查看工作日志（or the 帮助 menu）opens the plugin's `codeflow.log`: level filters, case-insensitive search, follow-tail (2s polling, stops on close), copy visible rows as raw JSONL, and 打开所在目录 with graceful 501 fallback to copying the path. Backed by `GET /api/log` (tail/rotated/level/q, path bound at wiring — request parameters cannot point it elsewhere) over `lib/logging/reader.js`.
 
 ## What changed in 1.2.2
 

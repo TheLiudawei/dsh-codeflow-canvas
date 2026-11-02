@@ -103,7 +103,7 @@ const L1 = (rel) => [
   'lib/analyst.js', 'lib/features.js', 'lib/workspace.js', 'lib/codeflow-config.js',
   'lib/migration.js', 'lib/message.js', 'lib/workspace-binding.js', 'lib/archive.js',
   'lib/drop-import.js', 'lib/starter.js', 'lib/browse.js',
-].includes(rel) || rel.startsWith('lib/scan/') || rel.startsWith('lib/features/')
+].includes(rel) || rel.startsWith('lib/scan/') || rel.startsWith('lib/features/') || rel.startsWith('lib/cards/')
 const L2 = (rel) => [
   'lib/duo.js', 'lib/import/pipeline.js', 'lib/sessions.js', 'lib/activity.js', 'lib/undo.js', 'lib/gestures.js',
 ].includes(rel)
@@ -113,7 +113,9 @@ const L3 = (rel) => rel.startsWith('lib/http/') || [
 ].includes(rel)
 const layerOf = (rel) => {
   if (rel === 'lib/index.js') return 'L4'
-  if (rel === 'lib/ui/actions.js') return 'DATA' // 纯数据清单：零 import 单独断言
+  /* v1.3.0：lib/ui/* 数据/纯渲染层——actions 零 import（单独断言），
+     menu 模型只 import actions、menu-html 只 import menu（渲染 → 模型）。 */
+  if (rel.startsWith('lib/ui/')) return 'DATA'
   if (L0(rel)) return 'L0'
   if (L1(rel)) return 'L1'
   if (L2(rel)) return 'L2'

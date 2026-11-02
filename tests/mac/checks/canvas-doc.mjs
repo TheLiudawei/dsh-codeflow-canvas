@@ -25,8 +25,9 @@ import { makeGraph } from '../lib/harness.mjs'
 /** 画布启动与首绘依赖的元素；少一个就会在 boot 时抛错。 */
 const CRITICAL_IDS = [
   'codeflow-canvas',
-  'cf-tb-new', 'cf-tb-import', 'cf-tb-add', 'cf-tb-runall', 'cf-tb-undo',
-  'cf-tb-coupling', 'cf-tb-layout', 'cf-tb-fit', 'cf-tb-settings', 'cf-tb-save', 'cf-tb-help',
+  'cf-tb-new', 'cf-tb-import', 'cf-tb-runall', 'cf-tb-undo',
+  'cf-tb-settings', 'cf-tb-save',
+  'cf-menu-project', 'cf-menu-run', 'cf-menu-view', 'cf-menu-help', 'cf-menu-compact',
   'cf-viewtabs', 'cf-vtab-tasks', 'cf-vtab-modules',
   'cf-stage', 'cf-world', 'cf-links', 'cf-nodes', 'cf-empty', 'cf-empty-new', 'cf-empty-import',
   'cf-zoomer', 'cf-z-in', 'cf-z-out', 'cf-z-fit', 'cf-nav', 'cf-navpop', 'cf-navsearch', 'cf-navlist', 'cf-mini',

@@ -171,10 +171,8 @@ function ensureCouplingCard(){
 function renderCouplingCard(){
   var card=ensureCouplingCard();
   var meta=couplingMetaOf();
-  var btn=$('cf-tb-coupling');
   if(!meta){
     card.hidden=true;
-    if(btn)btn.disabled=COUPLING.running||!modulesAvailable();
     return;
   }
   var overall=meta.overall;
@@ -206,20 +204,19 @@ function renderCouplingCard(){
     parts.push('来自模块结构图');
   }
   card.querySelector('.cf-coupling-line2').textContent=parts.join(' · ');
-  if(btn)btn.disabled=COUPLING.running||!modulesAvailable();
+  /* 入口启用状态由 updateCouplingButton() 经 setActionState 统一维护。 */
 }
 
-/* ---- 工具栏按钮状态 ---- */
+/* ---- 耦合分析入口状态（v1.3.0 起为「运行」菜单项；工具栏独立按钮已并入菜单） ---- */
 function updateCouplingButton(){
-  var btn=$('cf-tb-coupling');
-  if(!btn)return;
-  if(!HOSTED){btn.hidden=true;return;}
-  btn.hidden=false;
+  /* 状态经 setActionState 广播到 [data-action="toolbar:cf-tb-coupling"]
+     （菜单项与折叠面板项同时更新；menu-ui.js 定义，同 IIFE 提升）。 */
+  if(!HOSTED){setActionState('toolbar:cf-tb-coupling',{hidden:true});return;}
   var available=modulesAvailable();
-  btn.disabled=COUPLING.running||!available;
-  btn.setAttribute('data-tooltip',!available
-    ?'当前项目没有模块结构图，请先导入项目'
-    :'耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent、不消耗 token）');
+  setActionState('toolbar:cf-tb-coupling',{disabled:COUPLING.running||!available,
+    title:!available
+      ?'当前项目没有模块结构图，请先导入项目'
+      :'耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent、不消耗 token）'});
 }
 
 /* ---- 详情弹窗：整体结论 + 模块表格（分数降序）+ 根目录/时间/受限数 ---- */
@@ -286,8 +283,7 @@ var renderNodesCouplingBase=renderNodes;
 renderNodes=function(){renderNodesCouplingBase();applyCouplingMarks();};
 function initCouplingExtras(){
   if(!HOSTED){
-    var btn=$('cf-tb-coupling');
-    if(btn)btn.hidden=true;
+    setActionState('toolbar:cf-tb-coupling',{hidden:true});
     return;
   }
   /* v1.2.2：工具栏按钮的 click 绑定。此前 runCouplingAnalysis 只能从节点右键、

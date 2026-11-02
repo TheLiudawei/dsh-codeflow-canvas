@@ -2,12 +2,7 @@
   "note": "surface -> key[] 稳定快照；清单增删必须同步本文件（tests/buttons.mjs §6）",
   "surfaces": {
     "toolbar": [
-      "toolbar:cf-tb-add",
-      "toolbar:cf-tb-coupling",
-      "toolbar:cf-tb-fit",
-      "toolbar:cf-tb-help",
       "toolbar:cf-tb-import",
-      "toolbar:cf-tb-layout",
       "toolbar:cf-tb-new",
       "toolbar:cf-tb-runall",
       "toolbar:cf-tb-save",
@@ -15,6 +10,20 @@
       "toolbar:cf-tb-undo",
       "toolbar:cf-vtab-modules",
       "toolbar:cf-vtab-tasks"
+    ],
+    "menu": [
+      "cards:cleanup-stale",
+      "logs:open-viewer",
+      "menu:compact",
+      "menu:help",
+      "menu:project",
+      "menu:run",
+      "menu:view",
+      "toolbar:cf-tb-add",
+      "toolbar:cf-tb-coupling",
+      "toolbar:cf-tb-fit",
+      "toolbar:cf-tb-help",
+      "toolbar:cf-tb-layout"
     ],
     "status": [
       "status:cf-projname",
@@ -96,6 +105,7 @@
       "dialog:undoconfirm:confirm"
     ],
     "dialog:settings": [
+      "dialog:settings:logs",
       "dialog:settings:reset-dir",
       "dialog:settings:reset-root",
       "dialog:settings:save"
@@ -139,6 +149,15 @@
     ],
     "menu:features": [
       "menu:features:refresh"
+    ],
+    "dialog:logs": [
+      "logs:bottom",
+      "logs:copy",
+      "logs:follow",
+      "logs:level",
+      "logs:refresh",
+      "logs:reveal",
+      "logs:search"
     ]
   }
 }

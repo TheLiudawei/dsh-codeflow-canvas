@@ -52,7 +52,13 @@ const sources = {
   'tools/patches/browse-ui.js': await read('tools/patches/browse-ui.js'),
   'tools/patches/features-ui.js': await read('tools/patches/features-ui.js'),
   'tools/patches/log-ui.js': await read('tools/patches/log-ui.js').catch(() => ''),
+  'tools/patches/menu-ui.js': await read('tools/patches/menu-ui.js'),
+  'tools/patches/cards-ui.js': await read('tools/patches/cards-ui.js'),
+  'tools/patches/logview-ui.js': await read('tools/patches/logview-ui.js'),
   'lib/ui/actions.js': await read('lib/ui/actions.js'),
+  'lib/ui/menu.js': await read('lib/ui/menu.js'),
+  'lib/ui/menu-html.js': await read('lib/ui/menu-html.js'),
+  'lib/ui/fit-popover.js': await read('lib/ui/fit-popover.js'),
 }
 const corpus = canvas
 
@@ -62,8 +68,9 @@ const corpus = canvas
   const canvasStat = await stat(path.join(ROOT, 'assets/canvas/canvas.html'))
   const stale = []
   for (const rel of ['tools/port-canvas.mjs', 'tools/upstream/canvas-template.html', 'lib/ui/actions.js',
+    'lib/ui/menu.js', 'lib/ui/menu-html.js', 'lib/ui/fit-popover.js',
     'tools/patches/coupling-ui.js', 'tools/patches/drop-ui.js', 'tools/patches/browse-ui.js',
-    'tools/patches/features-ui.js', 'tools/patches/log-ui.js', 'tools/theme-light.css']) {
+    'tools/patches/features-ui.js', 'tools/patches/log-ui.js', 'tools/patches/menu-ui.js', 'tools/patches/menu-ui.css', 'tools/patches/cards-ui.js', 'tools/patches/logview-ui.js', 'tools/patches/logview-ui.css', 'tools/theme-light.css']) {
     try {
       const info = await stat(path.join(ROOT, rel))
       if (info.mtimeMs > canvasStat.mtimeMs) stale.push(rel)
@@ -128,11 +135,12 @@ function functionBody(name) {
   return null
 }
 
-/** 静态 id 的直接绑定证据：`$('<id>')` 后近处出现 click 监听（同语句窗口）。 */
+/** 静态 id 的直接绑定证据：`$('<id>')` / `cfBindToolbar('<id>'` 后近处出现 click 监听。 */
 function directIdBinding(id) {
   return nearAfter(corpus, `$('${id}')`, `\\.addEventListener\\('click'`, 260)
     || nearAfter(corpus, `$("${id}")`, `\\.addEventListener\\("click"`, 260)
     || nearAfter(corpus, `getElementById('${id}')`, `\\.addEventListener\\('click'`, 260)
+    || corpus.includes(`cfBindToolbar('${id}'`) // v1.3.0 守卫绑定助手
 }
 
 /** 动态选择器的绑定证据：(a) querySelector(All) 工厂；(b) className/class 创建点。 */
@@ -166,6 +174,14 @@ const DELEGATE_TABLE = {
     reason: '#cf-dialog 上的一次事件委托统一兜底 close/cancel（各对话框自己的直接绑定保留，二者幂等）',
     markers: ['[data-act="close"],[data-act="cancel"]'],
   },
+  'menu-bar': {
+    reason: 'menu-ui.js 的一次捕获委托处理所有菜单触发按钮（[data-cf-menu] 开/关 + aria-expanded 同步）',
+    markers: ["closest('[data-cf-menu]')", 'aria-expanded'],
+  },
+  'menu-action': {
+    reason: 'menu-ui.js 的委托把 [data-action] 项交给 ACTION_RUNNERS 查表，复用与主按钮相同的函数（无第二份 handler）',
+    markers: ["closest('[data-action]')", 'var ACTION_RUNNERS={'],
+  },
   'node-dblclick': {
     reason: '模板把 stage 的 dblclick 委托给 onDbl，onDbl 内 .cf-node 命中即 openDetails(id)',
     markers: ["stage.addEventListener('dblclick',onDbl)", 'openDetails(id)'],
@@ -198,8 +214,8 @@ for (const entry of CANVAS_ACTIONS) {
   if (!entry.id && !entry.selector && !String(entry.surface ?? '').startsWith('menu:')) {
     finding('missing-manifest', entry, '既没有 id 也没有 selector', '补 id（静态）或 selector（动态）')
   }
-  if (!['always', 'hosted', 'modules', 'notRunning', 'bothViews', 'issue', 'session'].includes(entry.enabledWhen)) {
-    finding('missing-manifest', entry, `enabledWhen 非法：${entry.enabledWhen}`, 'always|hosted|modules|notRunning|bothViews|issue|session')
+  if (!['always', 'hosted', 'modules', 'notRunning', 'bothViews', 'issue', 'session', 'staleCards'].includes(entry.enabledWhen)) {
+    finding('missing-manifest', entry, `enabledWhen 非法：${entry.enabledWhen}`, 'always|hosted|modules|notRunning|bothViews|issue|session|staleCards')
   }
   if (!/^(auto|manual):/.test(String(entry.test ?? ''))) finding('missing-manifest', entry, 'test 字段必须是 auto:/manual: 前缀', '归属 tests/buttons.mjs 或 MANUAL-CHECKLIST.md')
 }
@@ -223,10 +239,10 @@ for (const id of phantom) {
 }
 if (phantom.length === 0) ok('清单静态 id 全部存在于生成物')
 
-/* 每个 <button> 标签至少带 id / data-act / data-b / data-run / data-crumb / data-farrow 之一。 */
+/* 每个 <button> 标签至少带 id / data-act / data-b / data-run / data-crumb / data-farrow / data-action / data-lv 之一。 */
 const bareButtons = [...canvas.matchAll(/<button[^>]*>/g)]
   .map((m) => m[0])
-  .filter((tag) => !/\b(id|data-act|data-b|data-run|data-crumb|data-farrow)=/.test(tag))
+  .filter((tag) => !/\b(id|data-act|data-b|data-run|data-crumb|data-farrow|data-action|data-lv|data-lv-level)=/.test(tag))
 if (bareButtons.length > 0) {
   finding('missing-manifest', null, `${bareButtons.length} 个 <button> 标签没有任何可寻址属性（id/data-act/data-b/…）`,
     `例如：${bareButtons[0].slice(0, 90)}`)
@@ -249,7 +265,10 @@ for (const [attr, selPrefix] of [['data-act', '[data-act="'], ['data-b', '[data-
     }
     literals.add(attr === 'data-run' ? '*' : m[1])
   }
-  const coveredSelectors = new Set(CANVAS_ACTIONS.filter((e) => e.selector?.startsWith(`[${attr}`)).map((e) => e.selector))
+  /* 清单选择器必须**精确**是 `[data-act="X"]` 形状——`[data-action=…]` 以
+     `[data-act` 开头但不能算进来（data-action 有自己的覆盖检查）。 */
+  const exactSelRe = attr === 'data-run' ? /^\[data-run\]$/ : new RegExp(`^\\[${attr}="([^"]*)"\\]$`)
+  const coveredSelectors = new Set(CANVAS_ACTIONS.map((e) => exactSelRe.exec(e.selector ?? '')?.[0]).filter(Boolean))
   for (const lit of literals) {
     const sel = attr === 'data-run' ? '[data-run]' : `[${attr}="${lit}"]`
     if (!coveredSelectors.has(sel)) {
@@ -265,6 +284,24 @@ for (const [attr, selPrefix] of [['data-act', '[data-act="'], ['data-b', '[data-
     }
   }
   if (literals.size > 0 || coveredSelectors.size > 0) ok(`${attr} 字面量与清单互相覆盖（字面量 ${literals.size} / 清单 ${coveredSelectors.size}）`)
+}
+
+/* data-action 字面量（菜单项）⇄ CANVAS_ACTIONS key 双向覆盖：菜单项只允许
+   引用既有 action key（单一事实来源）；清单里的 [data-action] 选择器必须
+   真实出现在生成物中。JS 拼接片段（如 '[data-action="'+key+'"]'）不是
+   字面量，按 token 形状过滤。 */
+{
+  const keys = new Set(CANVAS_ACTIONS.map((e) => e.key))
+  const used = new Set([...canvas.matchAll(/data-action="([^"]+)"/g)].map((m) => m[1]).filter((k) => /^[a-z0-9:_-]+$/.test(k)))
+  const unknown = [...used].filter((k) => !keys.has(k))
+  for (const k of unknown) finding('missing-manifest', { surface: 'menu', key: k }, `data-action="${k}" 不在 CANVAS_ACTIONS`, '菜单项只能引用既有 action key；新动作先登记清单')
+  for (const entry of CANVAS_ACTIONS) {
+    const m = /^\[data-action="([^"]+)"\]$/.exec(entry.selector ?? '')
+    if (m && !canvas.includes(`data-action="${m[1]}"`)) {
+      finding('missing-manifest', entry, `清单选择器 ${entry.selector} 在生成物中不存在`, '菜单模型删除了该项则同步清理清单')
+    }
+  }
+  if (unknown.length === 0) ok(`data-action 字面量全部引用清单 key（${used.size} 个）`)
 }
 
 /* -------------------------------------------------------- 2. 绑定存在性 --- */
@@ -537,28 +574,37 @@ for (const [id, state] of htmlStates) {
 }
 if (!findings.some((f) => f.category === 'permanently-disabled')) ok('disabled/hidden 控件都有解除状态的代码路径')
 
-/* 专项断言：#cf-tb-coupling（任务书 §6.4 规则 3）。 */
+/* 专项断言：耦合分析入口（v1.3.0：并入「运行」菜单，经 setActionState 广播状态）。 */
 {
   const entry = CANVAS_ACTIONS.find((e) => e.key === 'toolbar:cf-tb-coupling')
-  if (!entry) finding('missing-manifest', { surface: 'toolbar', key: 'toolbar:cf-tb-coupling' }, '耦合分析按钮没有清单项', '必须显式登记')
+  if (!entry) finding('missing-manifest', { surface: 'menu', key: 'toolbar:cf-tb-coupling' }, '耦合分析没有清单项', '必须显式登记')
   else {
-    if (entry.handler !== 'runCouplingAnalysis') finding('missing-binding', entry, `handler 必须是 runCouplingAnalysis，实际 ${entry.handler}`, '任务书 §6.7')
-    if (!directIdBinding('cf-tb-coupling')) {
-      finding('missing-binding', entry,
-        'toolbar:cf-tb-coupling 无 click 绑定：#cf-tb-coupling 在 HTML 里是 disabled，runCouplingAnalysis() 只被右键菜单与详情弹窗调用，工具栏按钮永远点不动',
-        "在 initCouplingExtras() 里补 $('cf-tb-coupling').addEventListener('click', function(){runCouplingAnalysis(null);})，并重新生成画布")
-    } else ok('#cf-tb-coupling 有 click 绑定（runCouplingAnalysis）')
+    if (entry.handler !== 'runCouplingAnalysis') finding('missing-binding', entry, `handler 必须是 runCouplingAnalysis，实际 ${entry.handler}`, '任务书 §4.2')
+    if (!canvas.includes('data-action="toolbar:cf-tb-coupling"')) {
+      finding('missing-binding', entry, '生成物中没有耦合分析的菜单项（data-action）', '检查 lib/ui/menu.js 的运行菜单模型')
+    } else ok('耦合分析入口存在于菜单（data-action）')
+    if (!corpus.includes("'toolbar:cf-tb-coupling':function(){runCouplingAnalysis(null);}")) {
+      finding('missing-binding', entry, 'ACTION_RUNNERS 缺少耦合分析的查表项（菜单项与主按钮必须复用同一函数）', 'menu-ui.js 的 ACTION_RUNNERS 补该 key')
+    } else ok('ACTION_RUNNERS 复用 runCouplingAnalysis（无第二份 handler）')
     const body = functionBody('updateCouplingButton')
-    if (body && body.includes('COUPLING.running') && body.includes('modulesAvailable()')) {
-      ok('updateCouplingButton() 同时引用 COUPLING.running 与 modulesAvailable()')
+    if (body && body.includes('COUPLING.running') && body.includes('modulesAvailable()') && body.includes('setActionState')) {
+      ok('updateCouplingButton() 引用 COUPLING.running / modulesAvailable() 并经 setActionState 广播')
     } else if (body) {
-      finding('permanently-disabled', entry, 'updateCouplingButton() 未同时引用 COUPLING.running 与 modulesAvailable()', '任务书 §6.4 规则 3')
+      finding('permanently-disabled', entry, 'updateCouplingButton() 未同时引用 COUPLING.running / modulesAvailable() / setActionState', '任务书 §4.3 状态同步')
     }
     /* 无条件置灰只允许出现在请求进行中的临时禁用（有恢复路径）；
-       耦合按钮的更新函数里绝不允许 disabled=true 字面量。 */
+       耦合入口的更新函数里绝不允许 disabled=true 字面量。 */
     const uncond = body ? /\bdisabled\s*=\s*true\b/.test(body) : false
-    if (uncond) finding('permanently-disabled', entry, 'updateCouplingButton() 里存在无条件 disabled=true', '耦合按钮只能按条件置灰')
+    if (uncond) finding('permanently-disabled', entry, 'updateCouplingButton() 里存在无条件 disabled=true', '只能按条件置灰')
   }
+  /* 专项断言：菜单触发按钮的 ARIA（生成物静态标记）。 */
+  const triggerIds = ['cf-menu-project', 'cf-menu-run', 'cf-menu-view', 'cf-menu-help', 'cf-menu-compact']
+  const missingAria = triggerIds.filter((id) => {
+    const tag = canvas.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))
+    return !tag || !tag[0].includes('aria-haspopup="menu"') || !tag[0].includes('aria-expanded="false"')
+  })
+  if (missingAria.length === 0) ok('菜单触发按钮全部带 aria-haspopup + aria-expanded')
+  else finding('missing-manifest', { surface: 'menu', key: missingAria.join(',') }, `触发按钮缺 ARIA 属性：${missingAria.join('、')}`, 'menu-html.js 渲染时补齐')
   /* 专项断言：#cf-session 的处理结论（v1.2.2：绑到 openSessionDialog）。 */
   const session = CANVAS_ACTIONS.find((e) => e.key === 'status:cf-session')
   if (session && directIdBinding('cf-session') && corpus.includes('function openSessionDialog(')) {

@@ -15,6 +15,9 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { CANVAS_ACTIONS } from '../lib/ui/actions.js'
+import { MENU_MODEL, validateMenuModel } from '../lib/ui/menu.js'
+import { renderMenuBar } from '../lib/ui/menu-html.js'
+import { fitPopover } from '../lib/ui/fit-popover.js'
 
 const SRC = fileURLToPath(new URL('upstream/canvas-template.html', import.meta.url))
 const OUT = fileURLToPath(new URL('../assets/canvas/canvas.html', import.meta.url))
@@ -56,40 +59,57 @@ text = replaceRange(text, '<!--', '-->', `<!--
   请勿手工修改：改上游模板或改本脚本，然后重新生成。
 `, 'header comment')
 
-/* ------------------------------------------------------- undo toolbar btn --- */
-/* 撤销运行：宿主每次画布运行前对项目源码树做快照，撤销恢复文件与节点状态（lib/undo.js） */
-text = replaceOnce(
-  text,
-  '<button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall" data-tooltip="按拓扑顺序执行所有待运行节点"><i data-lucide="play"></i>运行全部</button>',
-  '<button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall" data-tooltip="按拓扑顺序执行所有待运行节点"><i data-lucide="play"></i>运行全部</button>\n'
-  + '    <button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>',
-  'toolbar undo button',
-)
-
-/* ------------------------------------------------------------ view tabs --- */
-/* 双视图切换：任务流水线（workflow.json）/ 模块结构图（workflow.modules.json）。
-   只在两个视图都可用时显示；切出视图的编辑活动用小圆点提示。 */
-text = replaceOnce(
-  text,
-  '<span class="cf-tsep"></span>\n    <button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall"',
-  '<span class="cf-tsep"></span>\n'
-  + '    <div class="cf-viewtabs" id="cf-viewtabs" role="tablist" aria-label="画布视图切换" hidden>\n'
+/* ----------------------------------------------------- toolbar rebuild --- */
+/* v1.3.0：顶栏整段重构为「logo + 命名菜单 + 视图 tab + 主按钮/图标按钮」。
+   菜单标记由 lib/ui/menu-html.js 从 lib/ui/menu.js 的模型渲染（单一事实来源，
+   展开态与折叠态同源）；旧的 undo / viewtabs / settings / coupling 四处
+   replaceOnce 以旧按钮字符串为锚点，整段替换后锚点消失，全部并入本块。 */
+const VIEWTABS_HTML = '<div class="cf-viewtabs" id="cf-viewtabs" role="tablist" aria-label="画布视图切换" hidden>\n'
   + '      <button type="button" class="cf-viewtab" id="cf-vtab-tasks" role="tab" aria-selected="true" tabindex="0" data-tooltip="任务流水线视图（workflow.json）"><span class="cf-vtab-name">任务流水线</span><span class="cf-vtab-count">0</span><span class="cf-vtab-dot" hidden title="该视图有模块正在被修改"></span></button>\n'
   + '      <button type="button" class="cf-viewtab" id="cf-vtab-modules" role="tab" aria-selected="false" tabindex="-1" data-tooltip="模块结构图视图（workflow.modules.json）"><span class="cf-vtab-name">模块结构图</span><span class="cf-vtab-count">0</span><span class="cf-vtab-dot" hidden title="该视图有模块正在被修改"></span></button>\n'
-  + '    </div>\n'
-  + '    <button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall"',
-  'toolbar view tabs',
-)
+  + '    </div>'
+const TOOLBAR_HTML = '<div class="cf-tb">\n'
+  + '    <div class="cf-logo"><span class="cf-logo-mark">⬡</span><b>CodeFlow</b><span class="cf-logo-sub">工作流画布</span></div>\n'
+  + '    <nav class="cf-menubar" aria-label="CodeFlow 菜单">\n'
+  + '      ' + renderMenuBar(MENU_MODEL) + '\n'
+  + '    </nav>\n'
+  + '    ' + VIEWTABS_HTML + '\n'
+  + '    <span class="cf-tgrow"></span>\n'
+  + '    <button type="button" class="cf-tbtn" id="cf-tb-new" data-action="toolbar:cf-tb-new" data-tooltip="agent 根据需求生成项目初版"><i data-lucide="file-plus-2"></i><span class="cf-tbtn-text">新建项目</span></button>\n'
+  + '    <button type="button" class="cf-tbtn" id="cf-tb-import" data-action="toolbar:cf-tb-import" data-tooltip="扫描已有代码，识别语言与注释生成工作流"><i data-lucide="folder-open"></i><span class="cf-tbtn-text">导入项目</span></button>\n'
+  + '    <button type="button" class="cf-tbtn cf-accent" id="cf-tb-runall" data-action="toolbar:cf-tb-runall" data-tooltip="按拓扑顺序执行所有待运行节点"><i data-lucide="play"></i><span class="cf-tbtn-text">运行全部</span></button>\n'
+  + '    <span class="cf-tsep"></span>\n'
+  + '    <button type="button" class="cf-tbtn cf-icononly" id="cf-tb-undo" data-action="toolbar:cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i></button>\n'
+  + '    <button type="button" class="cf-tbtn cf-icononly" id="cf-tb-save" data-action="toolbar:cf-tb-save" data-tooltip="把工作流图保存到 CodeFlow/flow-projects/ 目录" aria-label="保存"><i data-lucide="save"></i></button>\n'
+  + '    <button type="button" class="cf-tbtn cf-icononly" id="cf-tb-settings" data-action="toolbar:cf-tb-settings" data-tooltip="CodeFlow 设置：项目根目录与项目目录" aria-label="设置" hidden><i data-lucide="settings"></i></button>\n'
+  + '  </div>\n  '
+text = replaceRange(text, '<div class="cf-tb">', '<div class="cf-stage"', TOOLBAR_HTML, 'toolbar rebuild (named menus)')
 
-/* -------------------------------------------------- settings + tooltip --- */
-/* v1.0：设置入口（齿轮 → 设置弹窗：项目根目录/项目目录），独立预览隐藏；
-   保存按钮的 tooltip 同步改为 CodeFlow/flow-projects/（需求 C 的文案） */
+/* ----------------------------------------- guarded toolbar bindings --- */
+/* v1.3.0：模板对每个工具栏按钮无条件 addEventListener；添加节点/整理布局/
+   适应视图/帮助已并入命名菜单（无独立按钮），`$('id')` 会拿到 null 直接抛
+   TypeError。改为守卫绑定，只绑保留 id 的四个主按钮（菜单项经 menu-ui 的
+   ACTION_RUNNERS 复用同一函数）。 */
 text = replaceOnce(
   text,
-  '<button type="button" class="cf-tbtn" id="cf-tb-save" data-tooltip="把工作流图保存到 flow-projects/ 目录"><i data-lucide="save"></i>保存</button>',
-  '<button type="button" class="cf-tbtn" id="cf-tb-settings" data-tooltip="CodeFlow 设置：项目根目录与项目目录" aria-label="设置" hidden><i data-lucide="settings"></i>设置</button>\n'
-  + '    <button type="button" class="cf-tbtn" id="cf-tb-save" data-tooltip="把工作流图保存到 CodeFlow/flow-projects/ 目录"><i data-lucide="save"></i>保存</button>',
-  'toolbar settings button + save tooltip',
+  "/* ================= 工具栏 ================= */\n"
+  + "$('cf-tb-new').addEventListener('click',openNewDialog);\n"
+  + "$('cf-tb-import').addEventListener('click',openImportDialog);\n"
+  + "$('cf-tb-add').addEventListener('click',function(){openAddDialog(null);});\n"
+  + "$('cf-tb-runall').addEventListener('click',runAll);\n"
+  + "$('cf-tb-layout').addEventListener('click',autoLayout);\n"
+  + "$('cf-tb-fit').addEventListener('click',fitView);\n"
+  + "$('cf-tb-save').addEventListener('click',saveProject);\n"
+  + "$('cf-tb-help').addEventListener('click',openHelp);\n",
+  "/* ================= 工具栏 ================= */\n"
+  + "/* v1.3.0：守卫绑定。添加节点/整理布局/适应视图/耦合分析/帮助的动作在\n"
+  + "   命名菜单里经 menu-ui 的 ACTION_RUNNERS 查表复用同一函数，不再有独立按钮。 */\n"
+  + "function cfBindToolbar(id,fn){var el=$(id);if(el)el.addEventListener('click',fn);}\n"
+  + "cfBindToolbar('cf-tb-new',openNewDialog);\n"
+  + "cfBindToolbar('cf-tb-import',openImportDialog);\n"
+  + "cfBindToolbar('cf-tb-runall',runAll);\n"
+  + "cfBindToolbar('cf-tb-save',saveProject);\n",
+  'guarded toolbar bindings',
 )
 
 /* ------------------------------------------------- banner retry button --- */
@@ -135,16 +155,10 @@ $('cf-dialog').addEventListener('click',function(e){
   'dialog close/cancel delegation',
 )
 
-/* ------------------------------------------------ coupling toolbar btn --- */
-/* v1.2 耦合分析：工具栏按钮 = 「分析全部耦合」。宿主始终分析模块图，任务视图
-   点击同样执行（只刷卡片）。无模块图/运行中时置灰（coupling-ui.js 维护状态）。 */
-text = replaceOnce(
-  text,
-  '<button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>',
-  '<button type="button" class="cf-tbtn" id="cf-tb-undo" data-tooltip="撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）" aria-label="撤销运行" disabled><i data-lucide="undo-2"></i>撤销运行</button>\n'
-  + '    <button type="button" class="cf-tbtn" id="cf-tb-coupling" data-tooltip="耦合分析：全部模块的耦合程度与整体「屎山程度」（纯宿主执行，不唤醒 agent）" aria-label="耦合分析" disabled><i data-lucide="activity"></i>耦合分析</button>',
-  'toolbar coupling button',
-)
+/* ---------------------------------------------- coupling context menus --- */
+/* v1.2 右键入口：文件级模块节点 → 「分析耦合」；空白画布 → 「分析全部耦合」。
+   canAnalyzeCouplingNode/runCouplingAnalysis 定义在 coupling-ui.js（同 IIFE 提升）。
+   v1.3.0：工具栏的耦合按钮并入「运行」命名菜单（menu 模型），右键入口保持不变。 */
 
 /* ---------------------------------------------- coupling context menus --- */
 /* v1.2 右键入口：文件级模块节点 → 「分析耦合」；空白画布 → 「分析全部耦合」。
@@ -269,7 +283,11 @@ var ICONS={
   'undo-2':'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   'settings':'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.9v2.5M12 18.6v2.5M2.9 12h2.5M18.6 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
   'activity':'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-  'upload':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'
+  'upload':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  'chevron-down':'<path d="M6 9l6 6 6-6"/>',
+  'menu':'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  'list':'<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  'file-text':'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/>'
 };
 function refreshIcons(){
   var pending=ROOT.querySelectorAll('[data-lucide]');
@@ -657,18 +675,21 @@ function openNavPop(cat,anchorBtn){
   positionNavPop();
   try{$('cf-navsearch').focus();}catch(e){}
 }
+/* v1.3.0：位置与高度由 fitPopover 用 stage 可用空间反推（唯一实现，构建期
+   内联）——弹层四边恒落在 stage 内；不再用 60vh（vh 是 iframe 视口，不是
+   stage），也不再出现「top 夹到 4 但底部仍溢出」。 */
 function positionNavPop(){
   var pop=$('cf-navpop');
-  var rr=ROOT.getBoundingClientRect();
+  if(!pop)return;
+  var rr=stageRect();
   var ref=(navPop.anchor&&navPop.anchor.isConnected)?navPop.anchor:$('cf-nav');
   var br=ref.getBoundingClientRect();
-  var left=br.right-rr.left+6;
-  var top=br.top-rr.top;
-  pop.style.left=left+'px';
-  pop.style.top=top+'px';
-  var ph=pop.offsetHeight,pw=pop.offsetWidth;
-  if(top+ph>rr.height-6)pop.style.top=Math.max(4,rr.height-ph-6)+'px';
-  if(left+pw>rr.width-6)pop.style.left=Math.max(4,br.left-rr.left-pw-6)+'px';
+  var anchor={left:br.left-rr.left,top:br.top-rr.top,right:br.right-rr.left,bottom:br.bottom-rr.top};
+  var fit=fitPopover({stageW:rr.width,stageH:rr.height,anchorRect:anchor,
+    popW:pop.offsetWidth,popH:pop.offsetHeight,pad:8,gap:4,minListHeight:96});
+  pop.style.left=fit.left+'px';
+  pop.style.top=fit.top+'px';
+  pop.style.maxHeight=fit.maxHeight+'px';
 }
 /* 列表行：类型色点 + 标题 + 次级说明（模块相对路径 / 任务状态摘要）+ 编辑标签。
    默认按标题 zh-CN 排序；搜索命中标题的排在命中路径的前面 */
@@ -702,7 +723,8 @@ function renderNavPop(){
   var list=$('cf-navlist');
   var items=navPopItems();
   navPop.items=items;
-  if(navPop.active>=items.length)navPop.active=items.length>0?items.length-1:-1;
+  /* v1.3.0：每次重渲染（搜索/图刷新/过滤）后都重算位置与高度。 */
+  positionNavPop();
   if(!items.length){list.innerHTML='<div class="cf-navempty">没有匹配的节点</div>';return;}
   list.innerHTML=items.map(function(it,i){return navRowHtml(it,i===navPop.active);}).join('');
   bindNavRowEvents(list);
@@ -725,9 +747,14 @@ function bindNavRowEvents(list){
   });
 }
 function scrollNavPopActive(){
+  /* v1.3.0：手动计算 scrollTop——scrollIntoView 会滚动整个 iframe（面板跳动）。
+     offsetParent 是 .cf-navlist（CSS 已 position:relative）。 */
   var list=$('cf-navlist');
-  var active=list.querySelector('.cf-navrow.active');
-  if(active&&active.scrollIntoView)try{active.scrollIntoView({block:'nearest'});}catch(e){}
+  var active=list?list.querySelector('.cf-navrow.active'):null;
+  if(!active)return;
+  var top=active.offsetTop,bottom=top+active.offsetHeight;
+  if(top<list.scrollTop+6)list.scrollTop=Math.max(0,top-6);
+  else if(bottom>list.scrollTop+list.clientHeight-6)list.scrollTop=bottom-list.clientHeight+6;
 }
 function setNavActiveId(id){
   var list=$('cf-navlist');
@@ -780,18 +807,32 @@ $('cf-navsearch').addEventListener('input',function(e){
   navPop.active=0;
   renderNavPop();
 });
-/* 浮层内键盘：↑/↓ 移动、Enter 选中、Esc 关闭；按键不进入画布快捷键 */
+/* 浮层内键盘：↑/↓ 移动、Enter 选中、Esc 关闭、PageUp/PageDown/Home/End 翻页；
+   按键不进入画布快捷键 */
 $('cf-navsearch').addEventListener('keydown',function(e){
   if(!navPop.open)return;
+  var count=navPop.items.length;
   if(e.key==='ArrowDown'){
     e.preventDefault();
-    if(navPop.items.length){var nx=Math.min(navPop.items.length-1,navPop.active+1);setNavActiveId(navPop.items[nx].n.id);}
+    if(count){var nx=Math.min(count-1,navPop.active+1);setNavActiveId(navPop.items[nx].n.id);}
   }else if(e.key==='ArrowUp'){
     e.preventDefault();
-    if(navPop.items.length){var pv=Math.max(0,navPop.active-1);setNavActiveId(navPop.items[pv].n.id);}
+    if(count){var pv=Math.max(0,navPop.active-1);setNavActiveId(navPop.items[pv].n.id);}
+  }else if(e.key==='PageDown'){
+    e.preventDefault();
+    if(count){var pd=Math.min(count-1,Math.max(0,navPop.active)+8);setNavActiveId(navPop.items[pd].n.id);}
+  }else if(e.key==='PageUp'){
+    e.preventDefault();
+    if(count){var pu=Math.max(0,Math.max(0,navPop.active)-8);setNavActiveId(navPop.items[pu].n.id);}
+  }else if(e.key==='Home'){
+    e.preventDefault();
+    if(count)setNavActiveId(navPop.items[0].n.id);
+  }else if(e.key==='End'){
+    e.preventDefault();
+    if(count)setNavActiveId(navPop.items[count-1].n.id);
   }else if(e.key==='Enter'){
     e.preventDefault();
-    if(navPop.items.length)pickNavRow(navPop.items[Math.max(0,navPop.active)].n.id);
+    if(count)pickNavRow(navPop.items[Math.max(0,navPop.active)].n.id);
   }else if(e.key==='Escape'){
     e.preventDefault();
     closeNavPop();
@@ -812,6 +853,14 @@ renderAll=function(){
 document.addEventListener('pointerdown',function(e){
   if(navPop.open&&!e.target.closest('.cf-navpop')&&!e.target.closest('.cf-nav'))closeNavPop();
 },true);
+/* v1.3.0：面板拖宽/拖窄、DSH 侧边栏宽度变化时重定位（stage 尺寸变了，
+   fitPopover 的可用空间也随之变化）。 */
+try{
+  if(typeof ResizeObserver==='function'){
+    var navPopRo=new ResizeObserver(function(){if(navPop.open)positionNavPop();});
+    navPopRo.observe($('cf-stage'));
+  }
+}catch(e){}
 
 /* ================= 连线渲染 ================= */`, 'module navigation + secondary list')
 
@@ -846,8 +895,9 @@ text = replaceOnce(
   if(mode!=='idle')return;
   e.preventDefault();
   cancelAnim();clearNavActive();
+  closeMenuBar(false);
   closeNavPopOnCanvas(e);`,
-  'onWheel closes nav pop',
+  'onWheel closes nav pop + menubar',
 )
 text = replaceOnce(
   text,
@@ -859,8 +909,8 @@ text = replaceOnce(
 text = replaceOnce(
   text,
   "if(e.key==='Escape'){closeNavPop();closeMenus();closeModal();return;}",
-  "if(e.key==='Escape'){if(closeBrowseOnEscape())return;closeNavPop();closeMenus();closeModal();return;}",
-  'Escape arms the browse picker',
+  "if(e.key==='Escape'){if(closeMenuBarOnEscape())return;if(closeBrowseOnEscape())return;closeNavPop();closeMenus();closeModal();return;}",
+  'Escape arms the menubar then the browse picker',
 )
 /* v1.2.1：浏览弹层打开时 Esc 只关弹层、不关导入对话框；画布手势不进入弹层 */
 text = replaceOnce(
@@ -1271,7 +1321,12 @@ const EXTRA_CSS = `
 .cf-vtab-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex:0 0 6px;}
 .cf-navpop{position:absolute;z-index:12;width:300px;max-width:calc(100% - 20px);background:#20202a;border:1px solid var(--cf-border2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.55);padding:7px;display:flex;flex-direction:column;gap:6px;}
 .cf-navsearch{flex:0 0 auto;}
-.cf-navlist{display:flex;flex-direction:column;gap:2px;max-height:60vh;overflow:auto;min-height:30px;}
+/* v1.3.0：列表在弹层内弹性滚动（弹层高度由 fitPopover 按 stage 反推并内联
+   maxHeight），不再用 60vh（vh 是 iframe 视口高度，不是 stage 可用高度）；
+   overscroll-behavior:contain 防止滚到边界后滚动整个 iframe。 */
+.cf-navlist{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;position:relative;}
+/* 左侧分类栏本身在分类很多时也要能滚，不顶出画布。 */
+.cf-nav{max-height:calc(100% - 80px);overflow-y:auto;}
 .cf-navrow{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;}
 .cf-navrow:hover,.cf-navrow.active{background:rgba(124,140,255,.14);border-color:rgba(124,140,255,.35);}
 .cf-navrow .cf-navrow-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
@@ -1733,16 +1788,18 @@ function refreshUndoButtonSoon(){
   undoBtnTimer=setTimeout(function(){undoBtnTimer=null;updateUndoButton();},400);
 }
 function updateUndoButton(){
-  var btn=$('cf-tb-undo');if(!btn)return;
-  if(!HOSTED){btn.hidden=true;return;}
+  /* v1.3.0：状态经 setActionState 广播——工具栏图标与「运行」菜单项由同一
+     份动作状态驱动（menu-ui.js 定义，同 IIFE 函数提升）。 */
+  if(!HOSTED){setActionState('toolbar:cf-tb-undo',{hidden:true});return;}
   /* 保险：若最后一次轮询落在回合结束事件之前，ACT.running 可能滞留为 true
      （撤销按钮会一直禁用）。图里已无运行节点且活动数据已停更 2.5s 以上时，
      补一次轮询向宿主收敛状态；pollActivity 自带 inflight 防抖。 */
   if(ACT.running&&!hasRunningNodes()&&ACT.lastAt&&Date.now()-ACT.lastAt>2500){
     pollActivity();
   }
-  btn.disabled=ACT.running||hasRunningNodes();
-  btn.setAttribute('data-tooltip',btn.disabled?'运行中不能撤销':'撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）');
+  var disabled=ACT.running||hasRunningNodes();
+  setActionState('toolbar:cf-tb-undo',{disabled:disabled,
+    title:disabled?'运行中不能撤销':'撤销最近一次画布运行：恢复文件与节点状态（也可 Ctrl+Alt+Z）'});
 }
 function openUndoDialog(){
   if(!HOSTED){toast('独立模式没有撤销功能','err');return;}
@@ -2095,6 +2152,10 @@ function renderSettingsDialog(cfg){
     +(name?'<div class="cf-setrow"><label for="cf-set-dir">当前项目目录（'+esc(name)+'；空 = 用根目录）</label>'
     +'<div class="cf-setline"><input class="cf-in" id="cf-set-dir" type="text" spellcheck="false" placeholder="（用根目录下的 flow-projects/'+esc(name)+'）" value="'+esc(cfg.projectOverride||'')+'">'
     +'<button type="button" class="cf-btn mini" data-act="reset-dir">恢复默认</button></div></div>':'')
+    +'<div class="cf-setrow"><label class="cf-chk" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-set-cards"'+(cfg.cards&&cfg.cards.persist===true?' checked':'')+'> <span>重新导入时保留任务卡片（状态、结果、位置与修改）</span></label>'
+    +'<div class="cf-sechint">卡片随项目保存在 workflow.json；关闭后重新导入会重建卡片，旧图会备份为 .bak-时间。</div></div>'
+    +'<div class="cf-setrow"><div class="cf-setline"><button type="button" class="cf-btn mini" data-act="logs" data-tooltip="只读查看插件工作日志（codeflow.log）">查看工作日志…</button></div>'
+    +'<div class="cf-sechint">只读查看 codeflow.log：级别过滤、搜索、跟随尾部、复制、打开所在目录。</div></div>'
     +'<div class="cf-hintbox">修改只影响后续新建/解析；已有项目不会自动搬家。旧根里的项目仍可在项目列表中打开。</div>'
     +'<div class="cf-sechint" id="cf-set-err" style="color:#f87171;min-height:14px"></div>'
     +'</div>'
@@ -2124,6 +2185,12 @@ function renderSettingsDialog(cfg){
       body.project=name;
       body.projectDir=dirValue.length>0?dirValue:null;
     }
+    /* v1.3.0（需求三）：卡片持久化开关随同一次 POST 保存，不单发请求。 */
+    var cardsEl=d.querySelector('#cf-set-cards');
+    if(cardsEl)body.cards={persist:cardsEl.checked};
+    /* v1.3.0（需求四）：设置对话框里的「查看工作日志」入口。 */
+    var logsBtn=d.querySelector('[data-act="logs"]');
+    if(logsBtn)logsBtn.addEventListener('click',openLogViewer);
     apiPost('config',body).then(function(saved){
       closeModal();
       if(saved&&saved.projectDir){PROJECT_DIR=saved.projectDir;updateProjectDirTip();}
@@ -2201,6 +2268,49 @@ if (LOG_JS.includes('prompt(') || LOG_JS.includes('localStorage.setItem')) {
   throw new Error('log-ui.js: must not render UI or persist locally')
 }
 
+/* ------------------------------------------------------- cards (v1.3.0) --- */
+/* 任务卡片持久化（需求三）画布半边：首次询问 / 失效标记 / 运行守卫 / 清理。 */
+const CARDS_CSS = readFileSync(new URL('patches/cards-ui.css', import.meta.url), 'utf8').trim()
+const CARDS_JS = readFileSync(new URL('patches/cards-ui.js', import.meta.url), 'utf8').trim()
+if (!CARDS_CSS.includes('.cf-stale-badge{') || !CARDS_CSS.includes('html[data-cf-theme="light"] .cf-stale-badge')) {
+  throw new Error('cards-ui.css: expected the stale badge with a light override')
+}
+if (!CARDS_JS.includes('function cleanupStaleCards(') || !CARDS_JS.includes('function maybeAskCardsPersist(')) {
+  throw new Error('cards-ui.js: expected cleanupStaleCards and maybeAskCardsPersist')
+}
+
+/* ---------------------------------------------------- logview (v1.3.0) --- */
+/* 工作日志查看器（需求四）画布半边：级别过滤/搜索/跟随/复制/打开目录/轮询。 */
+const LOGVIEW_CSS = readFileSync(new URL('patches/logview-ui.css', import.meta.url), 'utf8').trim()
+const LOGVIEW_JS = readFileSync(new URL('patches/logview-ui.js', import.meta.url), 'utf8').trim()
+if (!LOGVIEW_CSS.includes('.cf-lv-list{') || !LOGVIEW_CSS.includes('html[data-cf-theme="light"] .cf-lv-list')) {
+  throw new Error('logview-ui.css: expected the log list with a light override')
+}
+if (!LOGVIEW_JS.includes('function openLogViewer(') || !LOGVIEW_JS.includes('logviewStopPoll')) {
+  throw new Error('logview-ui.js: expected openLogViewer and the polling stop hook')
+}
+if (!LOGVIEW_JS.includes("/codeflow/api/log?tail=") || !LOGVIEW_JS.includes('log/reveal')) {
+  throw new Error('logview-ui.js: expected the read API and the reveal API as only data sources')
+}
+
+/* ------------------------------------------------------- menu (v1.3.0) --- */
+/* 命名菜单栏（需求一）：样式与绑定补丁。模型/渲染在 lib/ui/menu*.js（构建期
+   已渲染成静态标记）；本补丁只做开关/键盘/委托/状态广播。 */
+const MENU_CSS = readFileSync(new URL('patches/menu-ui.css', import.meta.url), 'utf8').trim()
+const MENU_JS = readFileSync(new URL('patches/menu-ui.js', import.meta.url), 'utf8').trim()
+if (!MENU_CSS.includes('.cf-menupop{') || !MENU_CSS.includes('html[data-cf-theme="light"] .cf-menupop')) {
+  throw new Error('menu-ui.css: expected the menu popover with a light override')
+}
+if (!MENU_CSS.includes('flex-wrap:nowrap')) {
+  throw new Error('menu-ui.css: expected the toolbar nowrap override')
+}
+if (!MENU_JS.includes('function setActionState(') || !MENU_JS.includes('var ACTION_RUNNERS={')) {
+  throw new Error('menu-ui.js: expected setActionState and the ACTION_RUNNERS table')
+}
+if (!MENU_JS.includes("closest('[data-action]')") || !MENU_JS.includes('closeMenuBarOnEscape')) {
+  throw new Error('menu-ui.js: expected action delegation and the Escape gate')
+}
+
 /* 浅色覆盖层：追加到样式表末尾，靠 html[data-cf-theme="light"] 前缀胜出，深色规则不动。
    FEATURES_CSS 排在它之前：浅色作用域审计从浅色主题注释开始切片，功能样式的
    深色基线不会被误判为「未加前缀的浅色规则」。 */
@@ -2208,7 +2318,7 @@ const LIGHT_CSS = readFileSync(new URL('theme-light.css', import.meta.url), 'utf
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
   throw new Error('theme-light.css: expected the light variable block')
 }
-text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${BROWSE_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + browse + light theme stylesheet')
+text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${BROWSE_CSS}\n${MENU_CSS}\n${CARDS_CSS}\n${LOGVIEW_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + browse + menu + cards + logview + light theme stylesheet')
 
 /* ------------------------------------------------ action manifest (v1.2.2) --- */
 /* 控件清单注入：与 tests/buttons.mjs 同源（都 import lib/ui/actions.js），
@@ -2218,6 +2328,15 @@ text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${
 const ACTION_MANIFEST_JS = `/* ==== v1.2.2：画布控件清单（由 tools/port-canvas.mjs 从 lib/ui/actions.js 注入；只读调试信息，不参与行为） ==== */
 var CF_ACTION_MANIFEST=${JSON.stringify(CANVAS_ACTIONS).replace(/</g, '\\u003c')};
 try{window.__CF_ACTION_MANIFEST__=CF_ACTION_MANIFEST;}catch(e){}`
+
+/* ------------------------------------------------ fit-popover (v1.3.0) --- */
+/* 二级弹层几何（需求二）：lib/ui/fit-popover.js 是唯一实现，构建时把函数源码
+   内联进画布（不允许浏览器侧再写一份靠注释同步）。 */
+const FIT_POPOVER_JS = `/* ==== v1.3.0：弹层几何（由 tools/port-canvas.mjs 从 lib/ui/fit-popover.js 内联；单一实现） ==== */
+var fitPopover=${fitPopover.toString()};`
+if (!FIT_POPOVER_JS.includes('minListHeight') || !FIT_POPOVER_JS.includes("side")) {
+  throw new Error('fit-popover: expected the pure geometry function source for inlining')
+}
 
 /* ---------------------------------------------------- inject extras tail --- */
 /* 行为层注入点：boot() 之前定义（可包装已提升的函数声明），boot() 之后初始化挂钩。
@@ -2229,7 +2348,7 @@ try{window.__CF_ACTION_MANIFEST__=CF_ACTION_MANIFEST;}catch(e){}`
 text = replaceOnce(
   text,
   '\nboot();\n})();',
-  '\n' + ACTION_MANIFEST_JS + '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\n' + BROWSE_JS + '\n' + LOG_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\ninitLogExtras();\n})();',
+  '\n' + ACTION_MANIFEST_JS + '\n' + FIT_POPOVER_JS + '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\n' + BROWSE_JS + '\n' + LOG_JS + '\n' + MENU_JS + '\n' + CARDS_JS + '\n' + LOGVIEW_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\ninitLogExtras();\ninitMenuExtras();\ninitCardsExtras();\n})();',
   'canvas extras script',
 )
 

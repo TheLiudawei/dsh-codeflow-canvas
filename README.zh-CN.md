@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.2-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -33,6 +33,13 @@
 - **图能审，聊天记录不能。** 计划、顺序、卡在哪一步，一眼看完。
 - **导入不花钱。** 扫描、符号提取、耦合评分、功能归属全是本地确定性计算——不调模型、不联网、不依赖 npm 包。
 - **不伪造。** 只有 agent 真的执行并回报了，节点才会变绿；没执行的节点会被对账为 `failed`，不会永远转圈。
+
+## 1.3.0 变更
+
+- **顶栏重构为「命名菜单 + 主操作」布局。** 现在是 `logo · 项目/运行/视图/帮助 · 视图 tab · 新建/导入/运行全部 · 撤销/保存/设置图标`，`flex-wrap: nowrap`——任何宽度都不换行；<720px 时四个菜单收进 `☰` 分组面板，**折叠态与展开态出自同一份模型**（`lib/ui/menu.js` → `lib/ui/menu-html.js` 构建期渲染成静态标记；`tools/patches/menu-ui.js` 只做事件委托，经一张 action key → 现有函数的查表复用同一份处理逻辑）。全键盘可用（↑/↓/Home/End/Esc），ARIA 完整。
+- **二级节点列表永远完整落在画布内。** 位置与高度由纯函数 `lib/ui/fit-popover.js`（构建期内联，单一实现）按 stage 可用空间反推：480px 高度 + 200 节点也能滚到最后一行，搜索框始终可见，列表滚轮不再带动画布缩放，左侧分类栏自身也可滚动。
+- **任务卡片重新导入不丢失（默认关闭）。** 首次打开画布按工作区询问一次（`cards.asked` 写入 `CodeFlow/config.json`）。开启后重新导入同一项目按稳定标识合并（`lib/cards/identity.js`）：运行状态、结果、位置、改过的标题/参数都附着到新扫描的图上；源码中已删除的任务保留为「失效卡片」（不参与运行全部，可从项目菜单一键清理）；合并是纯函数（`lib/cards/merge.js`），失败只警告绝不阻断导入。关闭时行为与 1.2.2 一致（覆盖 + `.bak-` 备份）。
+- **设置里可看工作日志。** 设置 → 查看工作日志（或「帮助」菜单）打开只读查看器：级别过滤、大小写不敏感搜索、跟随尾部（2 秒轮询，关闭即停）、复制可见原始 JSONL 行、打开所在目录（宿主无能力时降级为复制路径并明确提示）。底层是 `GET /api/log`（tail/rotated/level/q；文件路径在装配时绑定，请求参数指不到别处）与 `lib/logging/reader.js`。
 
 ## 1.2.2 变更
 

@@ -2675,7 +2675,7 @@ console.log('\n[v1.2 coupling + drop-import]')
 await check('the canvas carries the coupling card, badges, menus and toolbar entry', async () => {
   const canvas = await read('assets/canvas/canvas.html')
   assert.ok(canvas.includes("card.id='cf-coupling-card'"), 'the verdict card is created (dynamically)')
-  assert.ok(canvas.includes('id="cf-tb-coupling"'), 'the toolbar button exists')
+  assert.ok(canvas.includes('data-action="toolbar:cf-tb-coupling"'), 'the coupling entry lives in the run menu (v1.3.0)')
   assert.ok(canvas.includes("'分析耦合'") && canvas.includes("'分析全部耦合'"), 'both menu entries exist')
   assert.ok(canvas.includes('function runCouplingAnalysis('), 'the analysis entry exists')
   assert.ok(canvas.includes('function renderCouplingCard('), 'the card renderer exists')

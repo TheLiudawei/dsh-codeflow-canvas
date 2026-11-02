@@ -1,0 +1,25 @@
+/* ================= v1.3.0：工作日志查看器样式（深色基线） ================= */
+.cf-lv-body{display:flex;flex-direction:column;gap:6px;min-height:0;}
+.cf-lv-fileline{font-size:10.5px;color:var(--cf-dim);word-break:break-all;max-height:32px;overflow:hidden;}
+.cf-lv-bar{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;}
+.cf-lv-levels{display:inline-flex;gap:2px;}
+.cf-lv-search{flex:1 1 auto;min-width:80px;}
+.cf-lv-count{font-size:10.5px;color:var(--cf-dim);flex:0 0 auto;font-variant-numeric:tabular-nums;}
+.cf-lv-list{flex:1 1 auto;min-height:260px;max-height:52vh;overflow:auto;background:#12121a;border:1px solid var(--cf-border);border-radius:8px;padding:6px 8px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.6;position:relative;overscroll-behavior:contain;}
+.cf-lv-line{display:flex;gap:8px;align-items:baseline;white-space:nowrap;}
+.cf-lv-time{color:var(--cf-dim);flex:0 0 auto;font-variant-numeric:tabular-nums;}
+.cf-lv-level{flex:0 0 auto;font-weight:600;}
+.cf-lv-level.lv-debug{color:#8a8a98;}
+.cf-lv-level.lv-info{color:#4ade80;}
+.cf-lv-level.lv-warn{color:#fbbf24;}
+.cf-lv-level.lv-error{color:#f87171;}
+/* 级别双编码：颜色 + 文本（INFO/WARN/ERROR 字样常显）——不单靠颜色。 */
+.cf-lv-event{color:#b9c2ff;flex:0 0 auto;}
+.cf-lv-msg{color:var(--cf-text);overflow:hidden;text-overflow:ellipsis;}
+.cf-lv-data{color:var(--cf-dim);overflow:hidden;text-overflow:ellipsis;}
+.cf-lv-empty{color:var(--cf-dim);font-size:11.5px;padding:16px;text-align:center;}
+
+/* 浅色覆盖 */
+html[data-cf-theme="light"] .cf-lv-list{background:#f6f7fb;border-color:#d5d9e6;}
+html[data-cf-theme="light"] .cf-lv-msg{color:#1f2430;}
