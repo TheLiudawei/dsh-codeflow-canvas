@@ -758,7 +758,10 @@ await check('flow and flow-new inject one turn carrying the skill block', async 
 await check('flow-import runs host-side and never wakes the agent', async () => {
   const command = recorded.commands.find((c) => c.name === 'flow-import')
   const sink = []
-  const result = await command.handler({ agent: fakeAgent('s-import', sink), rawInput: ` ${fixtureRoot} `, signal: new AbortController().signal })
+  // 导入必须能解析出工作区才能写图文件。这里显式传 fixtureRoot：若沿用
+  // fakeAgent 的默认 cwd（一个不存在的目录），这几项只在「%TEMP% 里恰好残留
+  // codeflow-fake-cwd」的机器上通过，干净机器与 CI 上会全部红。
+  const result = await command.handler({ agent: fakeAgent('s-import', sink, fixtureRoot), rawInput: ` ${fixtureRoot} `, signal: new AbortController().signal })
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('已导入'), result.text)
   assert.equal(sink.length, 0, 'the agent must stay asleep during import')
@@ -767,7 +770,7 @@ await check('flow-import accepts an @-mentioned path', async () => {
   const command = recorded.commands.find((c) => c.name === 'flow-import')
   const sink = []
   const result = await command.handler({
-    agent: fakeAgent('s-import-at', sink),
+    agent: fakeAgent('s-import-at', sink, fixtureRoot),
     rawInput: ` @${fixtureRoot} `,
     signal: new AbortController().signal,
   })
@@ -787,7 +790,7 @@ await check('flow-import --modules builds the module graph host-side', async () 
   const command = recorded.commands.find((c) => c.name === 'flow-import')
   const sink = []
   const result = await command.handler({
-    agent: fakeAgent('s-import-modules', sink),
+    agent: fakeAgent('s-import-modules', sink, fixtureRoot),
     rawInput: ` --modules ${fixtureRoot} `,
     signal: new AbortController().signal,
   })
@@ -799,7 +802,7 @@ await check('flow-import reports a bad directory as an error', async () => {
   const command = recorded.commands.find((c) => c.name === 'flow-import')
   const sink = []
   const result = await command.handler({
-    agent: fakeAgent('s-import', sink),
+    agent: fakeAgent('s-import', sink, fixtureRoot),
     rawInput: path.join(fixtureRoot, 'missing'),
     signal: new AbortController().signal,
   })
