@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 /** 套件顺序即 CI 步骤顺序（validate 先跑，暴露最多结构问题）。 */
 export const SUITES = [
   'validate', 'regression', 'cards', 'menu', 'architecture', 'logging',
-  'undo', 'coupling', 'features', 'workspace', 'browse', 'import-shells',
+  'undo', 'typing', 'coupling', 'features', 'workspace', 'browse', 'import-shells',
   'log-viewer', 'drop-import', 'e2e', 'buttons', 'release', 'bench',
 ]
 

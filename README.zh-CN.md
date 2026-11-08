@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.4.2-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.5.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -73,6 +73,27 @@ CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一
 
 作为对照：在对话里写计划，模型至少要先读完源码才能开始——这里是 13.9 KB，**约 3.5k token（chars/4 估算）**。这一行是估算，并已明确标注；表里其余每一行都是实测。复现：`npm run bench`（加 `--json` 输出机器可读格式）。
 
+## 1.5.0 变更
+
+「先写要求、执行完由宿主自动认出类型」——把「添加节点时先选类型」这步从用户肩上卸下来。
+
+- **添加入口收敛为一个「新建任务」框。** 双击空白 / 右键菜单 / 视图菜单都只弹一个「要求」输入框
+  （空要求禁用提交）；节点以第 17 类 `task` 落图（`meta.cf.task:true` 结构标记，端口固定 `any → any`）。
+  旧的类型列表 UI 没有删除——抽成通用类型选择器，供节点右键「设置类型…」复用。
+- **运行后自动识别，零 LLM。** 回合结束时宿主用纯脚本判断这次实际改了什么：`lib/typing/classify.js`
+  是唯一规则表（有证据才产出 `codegen / edit / testgen / docgen / testrun / shell` 六类），归属按
+  「该节点自己的写文件工具路径 ∪ `artifacts`」∩ 本次 diff 计算——归属不到不猜，无文件改动保持 `task`。
+  识别不调用模型、不产生额外 agent 回合、不新增工具。识别结果写进 `meta.cf.typeAuto`（来源、规则 id、
+  时间、计数与最多 3 个样例路径，≤400 字节），节点颜色/标签随之变化，但**端口与连线永远不变**——
+  `typeOf` 在画布侧是「显示类型 + 结构档案」的唯一合并点。
+- **人工干预三条路。** 右键任务节点：设置类型…（手动 + 锁定，自动识别不再覆盖）、清除类型（回 `task`）、
+  自动识别（按最近一次运行的证据重识别，无证据提示「下次运行后自动识别」）。详情里能看到识别来源与
+  依据摘要，还能直接编辑「要求」。
+- **撤销连类型一起回滚。** 运行快照的节点记录增加 `type` 与识别状态；撤销把文件、执行状态与自动识别
+  一起恢复，其余 `meta.cf` 键（如失效卡片标记）不被整块覆盖。
+- **新套件 `tests/typing`**（CI 现在 19 个套件）：判定矩阵、两节点归属互不串味、锁定与幂等、
+  `reidentify` 门禁、撤销回滚（真 store + 真 undo + 临时目录）。
+
 ## 1.4.2 变更
 
 - **对比表现在有实测数字了。** `tests/bench.mjs`（`npm run bench`）把一份固定的 60 模块夹具喂给**真实的 `/flow-import` 命令**与**真实的撤销管理器**，输出导入耗时、agent 唤醒次数、prompt token、产出的任务/模块数、两次导入的一致性与撤销保真度。只要确定性或撤销不再成立，它就返回非零退出码——所以这张表不会悄悄过期。
@@ -108,11 +129,11 @@ CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一
 
 没有新功能——这一版让测试套件在**别人的机器上**也可信。
 
-- **CI 三平台跑 18 个套件。** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22，全部阻塞。每个步骤都带 `if: always()`：一个套件红了其余照跑，一轮就能看全貌。
+- **CI 三平台跑 19 个套件。** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22，全部阻塞。每个步骤都带 `if: always()`：一个套件红了其余照跑，一轮就能看全貌。
 - **修了一个真实的几何 bug。** `fit-popover` 的最小高度写成 `Math.min(minListHeight, Math.max(minListHeight, innerH))`——恒等于 `minListHeight`，极矮 stage 下仍然要 96px，把列表顶出下边界。现在改为 `Math.min(minListHeight, innerH)`，并在分支后把 `maxHeight` 夹到可用高度；对应测试也真正触达该边界（stage 100px、内高 84px）。
 - **测试不再依赖检出方式。** 以 `\n` 为锚点的断言在 CRLF 检出下失效（`.gitattributes` 已统一 LF，共享 `read()` 也做归一）；一条只在 Windows 成立的断言删除，改为显式的 win32 / POSIX 两条；四条 `/flow-import` 检查原先靠 `%TEMP%` 里的残留目录才通过，已 hermetic 化；workspace 与 browse 套件里的 Windows 路径断言改为显式传平台。修复了 [#2](https://github.com/TheLiudawei/dsh-codeflow-canvas/issues/2) 报告的两项失败。
 - **画布新鲜度改用内容哈希。** 生成器把输入源哈希写进画布头部（`tools/canvas-sources.mjs` 是唯一清单），按钮审计重算比对——mtime 在全新检出里根本不成立。
-- **`npm test`** 一次跑完 18 个套件。
+- **`npm test`** 一次跑完 19 个套件。
 
 ## 1.3.0 变更
 
@@ -158,7 +179,10 @@ CodeFlow 是面向 DSH（DeepSeek Harness）的编码工作流画布。导入一
 - **按次撤销。** 每次运行前快照项目源码树。可整次回退（文件 + 节点状态），严格 LIFO，DSH 重启后仍可用；恢复前先备份当前状态。
 - **每项目专用会话。** 每个项目一个持久会话（`CodeFlow · <项目>`），画布的运行只进该会话，不会劫持 DSH 当前会话。
 - **改代码高亮模块。** agent 真的写了文件时（从 `edit`/`write`/`apply_patch` 等工具参数提取，绝不猜对话文本），对应模块脉冲高亮并挂上徽章。
-- **16 种节点、端口有类型。** 连线按端口类型校验（`text` / `json` / `code` / `report` / `file` / `any`）；改参数会自动重置下游。
+- **17 种节点、端口有类型。** 连线按端口类型校验（`text` / `json` / `code` / `report` / `file` / `any`）；改参数会自动重置下游。
+- **添加任务，运行后自动识别类型。** 双击空白只写「要求」，agent 执行完由宿主纯脚本认出这次改的是什么
+  （改代码 / 新建代码 / 写测试 / 写文档 / 跑测试 / 跑命令）——识别不经过模型、不花 token；类型只影响
+  颜色与标签，端口和连线永不变化，可手动锁定或清除。
 - **零构建、零依赖。** `package.json` 没有任何运行时依赖。宿主半侧是普通 ESM，浏览器半侧是手写的 `__ModuleLoader__` bundle。
 
 ## 安装
@@ -272,7 +296,7 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 
 ### CI 到底覆盖了什么
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **Ubuntu / Windows / macOS 三平台**（Node 22）跑 **18 个套件**，三平台均为阻塞（红了就是失败）：
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 **Ubuntu / Windows / macOS 三平台**（Node 22）跑 **19 个套件**，三平台均为阻塞（红了就是失败）：
 
 | 覆盖范围 | 套件 |
 | --- | --- |
@@ -283,6 +307,7 @@ ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" tools/verify-client-bundle.mjs .
 | 分层与静态 import 无环 | `architecture` |
 | 日志 schema、脱敏、轮转、降级 | `logging` |
 | 运行快照、LIFO、跨视图恢复 | `undo` |
+| 任务节点运行后自动识别类型（零 LLM 规则表、归属、锁定、撤销回滚） | `typing` |
 | 耦合评分确定性与持久化 | `coupling` |
 | 功能索引构建与重建稳定性 | `features` |
 | 工作区解析链 | `workspace` |

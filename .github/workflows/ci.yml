@@ -5,7 +5,7 @@ name: CI
 # only requirement is a Node runtime — the suites import node:* builtins and
 # this repository's own modules, never the DSH host.
 #
-# 16 of the 18 suites run here. The two that do not:
+# 17 of the 19 suites run here. The two that do not:
 #   tests/mac/     macOS field diagnostics — a manual kit that needs an
 #                  installed DSH and a real desktop session (see its README)
 #   contrast.mjs   a module imported by validate/menu, not a standalone suite

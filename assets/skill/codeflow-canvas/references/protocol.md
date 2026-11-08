@@ -67,12 +67,17 @@ JSON 之后宿主会附加一段正文（硬性要求）：
   回合结束时把节点标记为 `failed`，画布上会出现失败原因与「重试」按钮。
 - 每个节点结束时必须 `progress` 置终态（`done`/`failed`）；`running` 不许留到回合结束。
 
-字段说明：`node` = 目标节点（`params` 原样，`cmd` 必带）；`upstream` = 直接上游
+字段说明：`node` = 目标节点（`params` 原样，`cmd` 必带）；`node.freeform` = **true 表示这是任务节点**
+（v1.5.0，`meta.cf.task:true` 的自由要求节点）：按 `node.params.requirement` 真实执行即可，`node.type`
+是宿主事后分类的结果、不是本次执行的约束——详见 SKILL.md「任务节点」一节；`upstream` = 直接上游
 `[{id,type,status,result(≤120字)}]`，可直接当输入上下文；`cwd`（`testrun`/`shell` 才带）= 必须
 执行命令的目录（导入项目 = 源码树，新建项目 = 项目目录）；`expect` = 一句话验收标准。
 `rerun=true`：已完成的节点也重跑。`undoable`：宿主是否已为本次运行创建文件快照（`false` 时带
 `warning` 字段说明原因，需要转告用户"本次运行不可撤销"）。文件快照是项目级的，撤销历史按时间全局
 LIFO（跨视图运行也共用一个"只能撤销最新一次"），但恢复只回滚该次运行所用视图的节点字段。
+
+任务节点的**类型由宿主在回合结束后写入**（`node.type` 与 `meta.cf.typeAuto`，零 LLM 纯脚本）：
+它不产生任何新消息、不需要你回填，你也不要去改这两个字段；撤销运行时它们会与文件一起回滚。
 
 ### `[CodeFlow:RUN_ALL]` 运行整图
 

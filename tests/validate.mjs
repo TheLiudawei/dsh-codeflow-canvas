@@ -1660,13 +1660,25 @@ await check('no legacy bridge survives the port', () => {
   assert.ok(!canvas.includes('::visualize'))
   assert.ok(!canvas.includes('widgetState'))
 })
-await check('the node library matches the reference document (16 types)', async () => {
+await check('the node library matches the reference document (17 types)', async () => {
   const block = canvas.slice(canvas.indexOf('var TYPES={'), canvas.indexOf('var CATS='))
   const keys = [...block.matchAll(/^\s{2}([a-z]+):\{label:/gm)].map((m) => m[1])
-  assert.equal(keys.length, 16, `canvas has ${keys.length}: ${keys.join(',')}`)
+  assert.equal(keys.length, 17, `canvas has ${keys.length}: ${keys.join(',')}`)
+  assert.ok(keys.includes('task'), 'the task type (v1.5.0) is registered')
   const doc = await read('assets/skill/codeflow-canvas/references/node-types.md')
   const documented = [...doc.matchAll(/^\*\*`(\w+)` /gm)].map((m) => m[1])
   assert.deepEqual(keys.slice().sort(), documented.slice().sort(), 'canvas and node-types.md agree')
+})
+await check('task nodes keep any→any ports through recognition (v1.5.0)', () => {
+  assert.ok(canvas.includes("  task:{label:'任务'"), 'TYPES has task')
+  assert.ok(canvas.includes('function openTaskDialog('), 'the add entry is the task dialog')
+  assert.ok(!canvas.includes('openAddDialog('), 'the old type-list add dialog is gone')
+  assert.ok(canvas.includes('function openTypePicker('), 'the old list survives as the type picker')
+  assert.ok(canvas.includes('typeOf=function(n){'), 'typeOf is the single display/structure merge point')
+  assert.ok(!canvas.includes("var addSub=CATS.map"), 'the canvas menu type submenu is gone')
+  assert.ok(canvas.includes("{label:'添加任务'"), 'the canvas menu carries a single task entry')
+  assert.ok(canvas.includes('taskBadgeHtml(n)'), 'node heads render the task badge')
+  assert.ok(canvas.includes('meta:{cf:{task:true}}'), 'addTaskNode stamps the structural marker')
 })
 await check('every icon the canvas asks for is defined locally', () => {
   const names = new Set([...canvas.matchAll(/data-lucide="([a-z0-9-]+)"/g)].map((m) => m[1]))

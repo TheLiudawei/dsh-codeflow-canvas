@@ -44,6 +44,8 @@ export const CANVAS_SOURCES = [
   'tools/patches/logview-ui.js',
   'tools/patches/menu-ui.css',
   'tools/patches/menu-ui.js',
+  'tools/patches/task-node-ui.css',
+  'tools/patches/task-node-ui.js',
 ]
 
 /** 画布头部注释里的哈希标记，例如 `源哈希：a1b2c3d4e5f60718`。 */

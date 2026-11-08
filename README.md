@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-3da639"></a>
   <a href="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheLiudawei/dsh-codeflow-canvas/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.4.2-4f46e5">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.5.0-4f46e5">
   <img alt="Platform" src="https://img.shields.io/badge/platform-DSH%20desktop-2ea043">
   <img alt="Dependencies" src="https://img.shields.io/badge/npm%20dependencies-0-brightgreen">
   <img alt="Build" src="https://img.shields.io/badge/build-none%20required-lightgrey">
@@ -73,6 +73,16 @@ Absolute timings come from the author's machine and will differ; the zeros and t
 
 For comparison, a plan written in the transcript cannot start without the model reading the source: 13.9 KB here, **≈3.5k tokens by the chars/4 heuristic**. That line is an estimate and is labelled as one — everything else in the table is measured. Reproduce with `npm run bench` (add `--json` for machine-readable output).
 
+## What changed in 1.5.0
+
+"Write the requirement first; the host recognizes the type after the run" — the "pick a type when adding a node" step moves off the user's shoulders.
+
+- **One add entry: a single New Task dialog.** Double-click, the canvas context menu and the View menu all open a dialog with a single requirement textarea (empty requirement keeps the button disabled); the node lands as the 17th type `task` (`meta.cf.task:true` structural marker, ports fixed at `any → any`). The old type list UI is not deleted — it became a generic type picker, reused by the node context menu's "设置类型…".
+- **Auto-typing after the run, zero LLM.** When a turn ends, the host decides with plain scripts what actually changed: `lib/typing/classify.js` is the single rule table (only evidence-backed `codegen / edit / testgen / docgen / testrun / shell`), and attribution is (the node's own write-tool paths ∪ `artifacts`) ∩ this run's diff — unclaimed files are never guessed, and no file changes means the node stays `task`. Recognition calls no model, produces no extra agent turn and adds no tool. The result lands in `meta.cf.typeAuto` (source, rule id, time, counts and up to 3 sample paths, ≤400 bytes); color and label follow, but **ports and links never change** — `typeOf` is the single display/structure merge point on the canvas.
+- **Three ways to intervene.** Right-click a task node: set type (manual + locked, auto-recognition stops overriding), clear type (back to `task`), or re-identify from the latest run's evidence (no evidence → "下次运行后自动识别"). The details dialog shows the source and the evidence summary, and lets you edit the requirement in place.
+- **Undo rolls the type back too.** Run snapshots now record `type` and the recognition state per node; restoring brings files, execution state and auto-typing back together, while unrelated `meta.cf` keys (like stale-card markers) are never clobbered.
+- **New `tests/typing` suite** (CI now runs 19 suites): the verdict matrix, two-node attribution without cross-talk, locking and idempotency, the `reidentify` gate, and undo rollback (real store + real undo + temp directories).
+
 ## What changed in 1.4.2
 
 - **The comparison table now has measured numbers.** `tests/bench.mjs` (run with `npm run bench`) drives a fixed 60-module fixture through the real `/flow-import` command and the real undo manager, then reports import time, agent wakeups, prompt tokens, tasks/modules produced, cross-import agreement and undo fidelity. It exits non-zero if determinism or undo stops holding, so the table cannot go stale silently.
@@ -108,11 +118,11 @@ Card identity got stricter, and two defects the CI matrix caught are fixed.
 
 No feature changes — this release makes the suite trustworthy on machines that are not the author's.
 
-- **CI runs 18 suites on three platforms.** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22, all blocking. Every step carries `if: always()`, so one failing suite still lets the rest report — a single run shows the whole picture.
+- **CI runs 19 suites on three platforms.** `ubuntu-latest` / `windows-latest` / `macos-latest` × Node 22, all blocking. Every step carries `if: always()`, so one failing suite still lets the rest report — a single run shows the whole picture.
 - **Fixed a real geometry bug.** `fit-popover` computed its minimum height as `Math.min(minListHeight, Math.max(minListHeight, innerH))` — identically `minListHeight` — so a short stage still demanded 96px and pushed the list past the bottom edge. It is now `Math.min(minListHeight, innerH)`, with `maxHeight` clamped to the available height; the test for that boundary actually exercises it (stage 100px, inner height 84px).
 - **The tests no longer depend on the checkout.** `\n`-anchored assertions broke on CRLF checkouts (`.gitattributes` now pins LF, and the shared `read()` normalises); one assertion only held on Windows and was removed in favour of the explicit win32/POSIX pair; four `/flow-import` checks were passing only because a stale directory happened to exist in `%TEMP%`; Windows-path assertions in the workspace and browse suites now pass an explicit platform. Closes the failures reported in [#2](https://github.com/TheLiudawei/dsh-codeflow-canvas/issues/2).
 - **Canvas freshness is a content hash.** The generator stamps the hash of its inputs into the canvas header (`tools/canvas-sources.mjs` is the single input list) and the button audit recomputes it, instead of comparing mtimes — which cannot work in a fresh clone.
-- **`npm test`** runs all 18 suites.
+- **`npm test`** runs all 19 suites.
 
 ## What changed in 1.3.0
 
@@ -158,7 +168,8 @@ No feature changes — this release makes the suite trustworthy on machines that
 - **Per-run undo.** The project tree is snapshotted before each run. Undo a whole run (files + node states), strictly LIFO, surviving restarts; the current state is backed up first.
 - **Dedicated session per project.** Each project owns one persistent session (`CodeFlow · <project>`); canvas runs go only there, and DSH's active session is never hijacked.
 - **Edits highlight modules.** When the agent really writes a file (from `edit`/`write`/`apply_patch` tool arguments — never guessed from prose), the matching module pulses and the card gets a badge.
-- **16 node types, typed ports.** Links are validated by port type (`text` / `json` / `code` / `report` / `file` / `any`); editing parameters resets downstream nodes.
+- **17 node types, typed ports.** Links are validated by port type (`text` / `json` / `code` / `report` / `file` / `any`); editing parameters resets downstream nodes.
+- **Add a task; the type follows the run.** Double-click the empty canvas, write the requirement, and once the agent has truly executed it the host classifies the change with plain scripts (code edit / new code / tests / docs / test run / shell) — no model, no extra tokens. The type only drives color and label; ports and links never change, and you can lock or clear it by hand.
 - **Zero build, zero dependencies.** `package.json` has no runtime dependencies. Host half is plain ESM; the browser half is a hand-written `__ModuleLoader__` bundle.
 
 ## Get started
@@ -254,7 +265,7 @@ tests/                    validate / regression / e2e / undo / coupling / featur
 ## Development
 
 ```bash
-# All 18 suites, in one go (plain Node; DSH does not need to be running)
+# All 19 suites, in one go (plain Node; DSH does not need to be running)
 npm test
 
 # Or one at a time — the same command works with the DSH binary as the runtime
@@ -272,7 +283,7 @@ Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a 
 
 ### What CI actually covers
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **18 suites on Ubuntu, Windows and macOS** (Node 22), blocking on all three. Between them:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **19 suites on Ubuntu, Windows and macOS** (Node 22), blocking on all three. Between them:
 
 | Area | Suite |
 | --- | --- |
@@ -283,6 +294,7 @@ Changing `lib/*.js` requires a DSH restart; changing `lib/client.js` requires a 
 | Layering and acyclic static imports | `architecture` |
 | Log schema, redaction, rotation, degrade path | `logging` |
 | Run snapshots, LIFO, cross-view restore | `undo` |
+| Task-node auto-typing after a run (zero-LLM rule table, attribution, locking, undo rollback) | `typing` |
 | Coupling score determinism and persistence | `coupling` |
 | Feature index build and rebuild stability | `features` |
 | Workspace resolution chain | `workspace` |

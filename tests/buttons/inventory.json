@@ -88,7 +88,8 @@
       "dialog:add:row"
     ],
     "dialog:details": [
-      "dialog:details:session"
+      "dialog:details:session",
+      "dialog:task:save-req"
     ],
     "dialog:coupling": [
       "dialog:coupling:rerun"
@@ -140,9 +141,12 @@
     ],
     "menu:node": [
       "menu:node:analyze-coupling",
+      "menu:node:auto-type",
+      "menu:node:clear-type",
       "menu:node:delete",
       "menu:node:rerun",
-      "menu:node:run"
+      "menu:node:run",
+      "menu:node:set-type"
     ],
     "menu:link": [
       "menu:link:delete"

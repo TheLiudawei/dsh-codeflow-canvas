@@ -22,7 +22,7 @@ var ACTION_RUNNERS={
   'toolbar:cf-tb-save':function(){saveProject();},
   'toolbar:cf-tb-settings':function(){openSettingsDialog();},
   'toolbar:cf-tb-coupling':function(){runCouplingAnalysis(null);},
-  'toolbar:cf-tb-add':function(){openAddDialog(null);},
+  'toolbar:cf-tb-add':function(){openTaskDialog(null);},
   'toolbar:cf-tb-layout':function(){autoLayout();},
   'toolbar:cf-tb-fit':function(){fitView();},
   'toolbar:cf-tb-help':function(){openHelp();},

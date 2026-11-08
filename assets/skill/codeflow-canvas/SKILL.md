@@ -13,7 +13,7 @@ description: "CodeFlow workflow canvas (ComfyUI-style) for DSH. A native sidebar
 | 文件 | 作用 |
 | --- | --- |
 | `references/workflow-schema.md` | 工作流图 JSON 格式（一个项目两个视图、含 `artifacts`/`presented` 可选字段） |
-| `references/node-types.md` | 16 种节点类型与每种的执行语义 |
+| `references/node-types.md` | 17 种节点类型与每种的执行语义（含任务节点与其类型识别） |
 | `references/protocol.md` | 画布 ↔ agent 消息协议（含 `view` 字段与 `progress` 模式） |
 | `references/import-analysis.md` | 导入项目时的扫描与注释解析规则（任务流水线 + 模块结构图） |
 
@@ -181,6 +181,21 @@ JSON 之后的「本次执行要求」正文是**硬性规则**。这条消息**
    完成 `progress` 或最终整图里带 `artifacts`（见 `node-types.md`）。
 8. 最终回复：每个执行节点的结果一行（✓/✗ + result），若有新增文件再附产出文件树；
    若 `undoable:false`（快照失败）或运行前有 `warning`，明确转告用户。
+
+### 任务节点（`freeform:true`，v1.5.0）
+
+画布上「新建任务」产生的节点是第 17 类 `task`：只带 `params.requirement`（多行要求）与
+`meta.cf.task:true` 结构标记，端口固定 `any→any`。RUN_NODE 消息的 `node.freeform:true` 表明它是任务节点。
+
+- **按 `params.requirement` 真实执行**。`node.type` 是宿主**事后**分类的结果（回合结束后由宿主
+  纯脚本识别：改代码 / 新建代码 / 写测试 / 写文档 / 跑测试 / 跑命令），**不是**对本次执行的额外约束
+  ——不要因为节点已被识别成 `edit` 就收窄这次要做的事，也不要因为叫「任务」就只做一半。
+- 要求为空 → `failed`，原因写「任务要求为空」。
+- **不得修改**节点的 `type`、`meta.cf`、`params.requirement`（除非用户明确要求改要求）。
+- 完成时照常 `progress`；**尽量上报 `artifacts`**——这是宿主把本次改动归属到该节点、进而自动写类型
+  的主要依据（只写文件工具的参数解析是另一条归属通道，覆盖面更窄）。
+- 宿主会在回合结束后自动写类型（零 LLM、不产生额外回合），画布上的类型徽章/颜色随之变化。
+  **agent 不需要、也不应该**调用任何工具去设置类型。
 
 ### SAVE
 

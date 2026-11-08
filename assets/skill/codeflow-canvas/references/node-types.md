@@ -1,7 +1,7 @@
 # CodeFlow 节点类型库（agent ↔ 画布共享契约）
 
 画布前端 JS 与本文件必须保持一致：画布负责展示与连线校验，agent 负责按本文件的"执行语义"真正干活。
-修改节点类型时，两处必须同步更新（画布模板中 `NODE_TYPES` 常量 + 本文件）。
+修改节点类型时，**三处必须同步更新**（画布 `TYPES` 常量 + 本文件 + `tests/validate.mjs` 的类型数量断言，v1.5.0 起是 17 类）。
 
 ## 端口类型（type token）
 
@@ -96,6 +96,44 @@
 - 执行语义：为核心模块写测试文件（放在 tests/ 或与源码同目录，遵循语言惯例）。`result` = `N 个测试文件，约 M 个用例`。
 - **注意**：新建项目（NEW）阶段为自检跑过的测试**不代表** `testrun` 节点已执行——
   用户点「测试运行」时该节点仍是 `pending`，必须重新真实执行并回填，不得把之前的运行当成它的结果。
+
+**`task` 任务**（第 17 类，v1.5.0）— 自由任务：先写要求，执行完由宿主自动识别类型。
+- 输入：`输入(any)`；输出：`输出(any)`——端口永远是 any→any，**识别后类型变化不影响端口与连线**。
+- 控件：`requirement`（textarea 要求）
+- 结构标记：`meta.cf.task:true`——决定端口/控件永远取 task 档案（`meta.cf.typeAuto`/`typeLocked` 只影响颜色、标签与徽章）。
+- 执行语义（v1.5.0 起）：
+  1. 按 `params.requirement` **真实执行**（要求为空 → `failed`，原因写「任务要求为空」）；
+     `node.type` 是宿主**事后**分类的结果，不是对本次执行的额外约束——不要因为节点叫「任务」或
+     已被识别成 `edit` 就收窄要做的事。
+  2. **不得修改**节点的 `type`、`meta.cf`、`params.requirement`（除非用户明确要求改要求）。
+  3. 完成时照常 `progress`；**尽量上报 `artifacts`**——这是宿主把本次改动归属到该节点的主要依据。
+  4. 宿主会在回合结束后用纯脚本（零 LLM、不产生额外回合）识别类型并写进图；agent 不需要、
+     也**不应该**调用任何工具去设置类型。
+
+## 任务节点的类型识别（宿主，零 LLM）
+
+只对 `meta.cf.task:true` 且 `status:"done"` 且未锁定（`meta.cf.typeLocked!==true`）的任务节点生效；
+导入图、模块图、新建项目骨架图里的既有类型节点一律不碰。识别是「本次运行」语义：重跑后允许类型变化，
+锁定后不变化。**没有文件改动时不猜类型**（保持 `task`）——不按自然语言关键词猜、不按 `result` 文本猜。
+
+证据与规则（首个命中即返回）：
+
+| 顺序 | 条件 | 类型 | reason |
+| --- | --- | --- | --- |
+| 1 | 无文件变更，且有测试命令 | `testrun` | `testrun-command` |
+| 2 | 无文件变更，且有普通命令 | `shell` | `shell-command` |
+| 3 | 有代码类 modified/deleted | `edit` | `edit-existing-code` |
+| 4 | 无代码 modified/deleted，且有代码类 added | `codegen` | `codegen-new-code` |
+| 5 | 无代码变更，有测试类变更 | `testgen` | `testgen-tests` |
+| 6 | 无代码/测试变更，只有文档类变更 | `docgen` | `docgen-docs` |
+| 7 | 其余（含无证据、未知扩展名） | 不写，保持 `task` | — |
+
+- 证据：本次运行的文件 diff（快照对比）∩ 该节点自己的写文件工具路径与 `artifacts`；外加该节点发起的
+  shell/测试命令。归属不到的文件不猜。代码 + 测试同时变时按代码为主（上表 3/4），刻意不多标签。
+- 识别结果写入 `node.meta.cf.typeAuto`（`{v:1, type, by:'host'|'manual', at, reason, counts:{added,modified,deleted}, sample[≤3]}`，
+  序列化 ≤400 字节，只有项目内相对路径，不含源码/密钥）；`meta.cf.typeLocked:true` 表示手动锁定，自动识别跳过。
+- 用户可右键手动改类型（锁定）、清除类型（回 `task`）或恢复自动识别；撤销运行时 `type` 与 `typeAuto`/`typeLocked`
+  一起回滚到运行前。
 
 ### 执行类（橙 #f97316）
 

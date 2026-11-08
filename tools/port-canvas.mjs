@@ -239,6 +239,114 @@ text = replaceOnce(
   'canvas menu analyze-all entry',
 )
 
+/* ----------------------------------------------------- task node (v1.5.0) --- */
+/* 「先写要求、执行完由宿主自动识别类型」：添加入口收敛为 openTaskDialog，
+   类型列表抽成 openTypePicker 供「设置类型…」复用；TYPES 增加第 17 类 task
+   （validate.mjs 硬断言 17 类并要求与 node-types.md 同步）；typeOf 合并点、
+   徽章与右键类型管理在 tools/patches/task-node-ui.js（本脚本只做静态结构）。 */
+
+/* 第 17 类：task。端口固定 any→any（识别后连线不失效的根）；cat 用既有 build。 */
+text = replaceOnce(
+  text,
+  "    widgets:[['notes','textarea','交付要求','']]}\n};",
+  "    widgets:[['notes','textarea','交付要求','']]},\n"
+  + "  task:{label:'任务',cat:'build',color:'#64748b',w:260,desc:'写清要求，agent 执行后自动识别类型',\n"
+  + "    ins:[['输入','any']],outs:[['输出','any']],\n"
+  + "    widgets:[['requirement','textarea','要求','']]}\n};",
+  'task node type (17th)',
+)
+
+/* 双击空白：添加任务（不再弹类型列表） */
+text = replaceOnce(
+  text,
+  '  var w=toWorld(e.clientX,e.clientY);\n  openAddDialog(w);',
+  '  var w=toWorld(e.clientX,e.clientY);\n  openTaskDialog(w);',
+  'onDbl opens the task dialog',
+)
+
+/* 画布右键：CATS × TYPES 分类子菜单退役，收敛为单个「添加任务」 */
+text = replaceOnce(
+  text,
+  "  var addSub=CATS.map(function(c){\n"
+  + "    return {label:c[1]+'节点',icon:'shapes',sub:Object.keys(TYPES).filter(function(k){return TYPES[k].cat===c[0];}).map(function(k){\n"
+  + "      return {label:TYPES[k].label,icon:'plus',act:function(){var n=addNode(k,[xToWorld(x),yToWorld(y)]);if(n){sel={type:'node',id:n.id};markSel();}}};\n"
+  + "    })};\n"
+  + "  });\n",
+  "  /* v1.5.0：添加入口收敛为「新建任务」——类型由宿主在运行后自动识别。 */\n",
+  'canvas menu drop the type submenu',
+)
+text = replaceOnce(
+  text,
+  "    {label:'添加节点',icon:'shapes',sub:addSub},",
+  "    {label:'添加任务',icon:'shapes',act:function(){openTaskDialog([xToWorld(x),yToWorld(y)]);}},",
+  'canvas menu single task entry',
+)
+
+/* 节点右键：任务节点追加「自动识别 / 设置类型… / 清除类型」（仅 meta.cf.task）；
+   复制任务节点时重置为 task 态，不复制识别/锁定结果（避免僵尸锁定）。 */
+text = replaceOnce(
+  text,
+  "    {label:'复制节点',icon:'copy',act:function(){\n"
+  + "      var c=clone(n);c.id=nextId();c.title=(n.title||t.label)+' 副本';c.status='pending';c.result='';c.detail='';\n"
+  + "      c.pos=[n.pos[0]+30,n.pos[1]+30];\n"
+  + "      G.nodes.push(c);renderNodes();redrawLinks();saveState(true);\n"
+  + "    }},",
+  "    {label:'复制节点',icon:'copy',act:function(){\n"
+  + "      var c=clone(n);c.id=nextId();c.title=(n.title||t.label)+' 副本';c.status='pending';c.result='';c.detail='';\n"
+  + "      c.pos=[n.pos[0]+30,n.pos[1]+30];\n"
+  + "      /* v1.5.0：任务节点副本回「任务」态——保留 meta.cf.task 与要求文本，\n"
+  + "         清空识别与锁定，绝不复制出一份「锁定且已识别」的僵尸状态。 */\n"
+  + "      if(c.meta&&c.meta.cf&&c.meta.cf.task===true){c.type='task';delete c.meta.cf.typeAuto;delete c.meta.cf.typeLocked;}\n"
+  + "      G.nodes.push(c);renderNodes();redrawLinks();saveState(true);\n"
+  + "    }},",
+  'node menu copy resets task state',
+)
+text = replaceOnce(
+  text,
+  "  if(canAnalyzeCouplingNode(n)){items.splice(3,0,{label:'分析耦合',icon:'activity',act:function(){runCouplingAnalysis(id);}});}\n"
+  + '  openMenu(items,x,y);\n'
+  + '}',
+  "  if(canAnalyzeCouplingNode(n)){items.splice(3,0,{label:'分析耦合',icon:'activity',act:function(){runCouplingAnalysis(id);}});}\n"
+  + "  /* v1.5.0：任务节点 → 类型管理（自动识别 / 设置并锁定 / 清除回任务）。\n"
+  + "     handlers 在 task-node-ui.js（同 IIFE 提升）；替换末尾分隔线避免双线。 */\n"
+  + "  if(n.meta&&n.meta.cf&&n.meta.cf.task===true){\n"
+  + "    items.splice(items.length-2,1,{sep:true},\n"
+  + "      {label:'自动识别',icon:'rotate-cw',act:function(){autoIdentifyType(id);}},\n"
+  + "      {label:'设置类型…',icon:'shapes',act:function(){setNodeType(id);}},\n"
+  + "      {label:'清除类型',icon:'unlink',act:function(){clearNodeType(id);}},\n"
+  + "      {sep:true});\n"
+  + "  }\n"
+  + '  openMenu(items,x,y);\n'
+  + '}',
+  'node menu task type entries',
+)
+
+/* 节点头部徽章：buildNode 在标题后插入 taskBadgeHtml(n)（非任务节点返回 ''） */
+text = replaceOnce(
+  text,
+  "    +'<span class=\"cf-grip\">⠿</span><span class=\"cf-node-title\">'+esc(n.title||t.label)+'</span>'\n"
+  + "    +'<span class=\"cf-badge\"",
+  "    +'<span class=\"cf-grip\">⠿</span><span class=\"cf-node-title\">'+esc(n.title||t.label)+'</span>'\n"
+  + "    +taskBadgeHtml(n)\n"
+  + "    +'<span class=\"cf-badge\"",
+  'node head task badge',
+)
+
+/* 帮助文案：添加节点的新语义 */
+text = replaceOnce(
+  text,
+  '双击空白添加节点',
+  '双击空白添加任务节点（写清要求，运行后自动识别类型）',
+  'help copy task semantics',
+)
+/* 空态提示：同一新语义 */
+text = replaceOnce(
+  text,
+  '右键空白画布查看全部操作 · 双击空白处添加节点',
+  '右键空白画布查看全部操作 · 双击空白处添加任务节点（写清要求，运行后自动识别类型）',
+  'empty-state hint task semantics',
+)
+
 /* ----------------------------------------------------- nav pop container --- */
 /* 二级导航浮层：分类下 ≥2 个节点时弹出，可按名称搜索、按 ↑/↓ 选择、Enter 定位 */
 text = replaceOnce(
@@ -654,6 +762,98 @@ function openImportDialog(){
 `
 
 text = replaceRange(text, 'function openImportDialog(){', 'function openAddDialog(worldPos){', IMPORT_DIALOG_JS, 'import dialog with browse picker')
+
+/* ------------------------------------------------ task dialogs (v1.5.0) --- */
+/* 整段接管旧的 openAddDialog（搜索框 + 分类 + 16 行类型）：「新建任务」只含
+   一个要求输入框（空要求禁用提交）；旧类型列表抽成通用 openTypePicker，供
+   节点右键「设置类型…」复用（allowAuto 时首项是自动识别）。addNode 保留给
+   内部使用，任务节点统一走 addTaskNode（meta.cf.task 结构标记）。 */
+const TASK_DIALOGS_JS = `
+/* v1.5.0：新建任务（只有一个要求输入框）+ 通用类型选择器 */
+function addTaskNode(requirement,pos){
+  var n={id:nextId(),type:'task',title:TYPES.task.label,pos:pos||[0,0],
+    params:{requirement:String(requirement||'')},status:'pending',result:'',detail:'',
+    meta:{cf:{task:true}}};
+  G.nodes.push(n);
+  renderNodes();redrawLinks();renderChrome();updateEmpty();renderNav();saveState(true);
+  return n;
+}
+function openTaskDialog(worldPos){
+  openModal(dHead('shapes','新建任务')
+    +'<div class="cf-dbody">'
+    +'<div class="cf-hintbox">只写「要求」：节点先以「任务」运行，agent 真实执行后由宿主自动识别类型（改代码 / 新建代码 / 写测试 / 写文档 / 跑测试 / 跑命令）。类型只影响颜色与标签——端口永远是 any→any，连线不变。</div>'
+    +fld('要求（尽可能具体）','<textarea class="cf-in" rows="5" data-f="requirement" placeholder="例：给 src/app.py 增加 --verbose 参数，并在 tests/ 下补一条对应用例"></textarea>')
+    +'</div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button><button type="button" class="cf-btn cf-primary" data-act="submit" disabled>添加任务</button></div>');
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  var input=d.querySelector('[data-f="requirement"]');
+  var submit=d.querySelector('[data-act="submit"]');
+  function syncSubmit(){submit.disabled=String(input.value||'').trim().length===0;}
+  if(input)input.addEventListener('input',syncSubmit);
+  submit.addEventListener('click',function(){
+    var requirement=String(input.value||'').trim();
+    if(!requirement){toast('请填写要求','err');return;}
+    var pos=worldPos||(function(){var r=stageRect();return toWorld(r.left+r.width/2,r.top+r.height/2);})();
+    pos=[Math.round(pos[0]-100+(G.nodes.length%5)*26),Math.round(pos[1]-60+(G.nodes.length%5)*22)];
+    closeModal();
+    var n=addTaskNode(requirement,pos);
+    if(n){sel={type:'node',id:n.id};markSel();toast('已添加任务节点：连好线、点运行，执行完成后自动识别类型');}
+  });
+  if(input)requestAnimationFrame(function(){try{input.focus();}catch(e){}});
+}
+/* 类型选择器：旧「添加节点」的类型列表抽成的通用组件。列表永远不含 task 本身
+   （回到任务用右键「清除类型」）；allowAuto=true 时首项是自动识别（onPick
+   收到 '__auto__'）。 */
+function openTypePicker(opts){
+  var title=(opts&&opts.title)||'设置类型';
+  var autoLabel=(opts&&opts.autoLabel)||'自动识别';
+  var allowAuto=!!(opts&&opts.allowAuto);
+  var onPick=(opts&&typeof opts.onPick==='function')?opts.onPick:function(){};
+  function listHtml(q){
+    var html='';
+    if(allowAuto&&(!q||autoLabel.indexOf(q)>=0)){
+      html+='<div class="cf-cathead">识别</div><div class="cf-tlist">'
+        +'<div class="cf-trow" data-type="__auto__" role="button" tabindex="0"><span class="cf-tdot" style="background:#64748b"></span>'
+        +'<span class="cf-tname">'+esc(autoLabel)+'</span><span class="cf-tdesc">清除锁定，按最近一次运行的证据重新识别</span></div></div>';
+    }
+    CATS.forEach(function(c){
+      var ks=Object.keys(TYPES).filter(function(k){return k!=='task'&&TYPES[k].cat===c[0];});
+      var vis=ks.filter(function(k){
+        var t=TYPES[k];
+        return !q||t.label.indexOf(q)>=0||k.indexOf(q.toLowerCase())>=0||t.desc.indexOf(q)>=0;
+      });
+      if(!vis.length)return;
+      html+='<div class="cf-cathead">'+esc(c[1])+'</div><div class="cf-tlist">';
+      vis.forEach(function(k){var t=TYPES[k];
+        html+='<div class="cf-trow" data-type="'+k+'" role="button" tabindex="0"><span class="cf-tdot" style="background:'+t.color+'"></span>'
+          +'<span class="cf-tname">'+esc(t.label)+'</span><span class="cf-tdesc">'+esc(t.desc)+'</span></div>';
+      });
+      html+='</div>';
+    });
+    return html||'<div class="cf-hintbox">没有匹配的节点类型</div>';
+  }
+  openModal(dHead('shapes',title)
+    +'<div class="cf-dbody"><input class="cf-in cf-search" data-f="q" placeholder="搜索节点类型…" aria-label="搜索节点类型">'
+    +'<div id="cf-addlist">'+listHtml('')+'</div></div>'
+    +'<div class="cf-dfoot"><button type="button" class="cf-btn" data-act="close">取消</button></div>');
+  var d=$('cf-dialog');
+  d.querySelector('[data-act="close"]').addEventListener('click',closeModal);
+  function wireRows(){
+    d.querySelectorAll('.cf-trow').forEach(function(row){
+      row.addEventListener('click',function(){closeModal();onPick(row.dataset.type);});
+      row.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();closeModal();onPick(row.dataset.type);}});
+    });
+  }
+  d.querySelector('[data-f="q"]').addEventListener('input',function(e){
+    $('cf-addlist').innerHTML=listHtml(e.target.value.trim());
+    wireRows();
+  });
+  wireRows();
+}
+`
+
+text = replaceRange(text, 'function openAddDialog(worldPos){', 'function openDetails(id){', TASK_DIALOGS_JS, 'task dialog + generic type picker')
 
 /* ------------------------------------------------ module navigation+pop --- */
 /* v0.6.0：分类点击 → 1 个节点直接定位；≥2 弹出可搜索二级浮层；聚焦单个节点；
@@ -2347,6 +2547,25 @@ if (!LOGVIEW_JS.includes("/codeflow/api/log?tail=") || !LOGVIEW_JS.includes('log
   throw new Error('logview-ui.js: expected the read API and the reveal API as only data sources')
 }
 
+/* --------------------------------------------------- task node (v1.5.0) --- */
+/* 任务节点行为补丁：typeOf 合并点 / 徽章 / 详情要求区 / 右键类型管理。
+   注入在 ACTIVITY_JS 之后（包装它的 openDetails）、boot() 之前。 */
+const TASKNODE_CSS = readText(new URL('patches/task-node-ui.css', import.meta.url)).trim()
+const TASKNODE_JS = readText(new URL('patches/task-node-ui.js', import.meta.url)).trim()
+if (!TASKNODE_CSS.includes('.cf-taskbadge{') || !TASKNODE_CSS.includes('html[data-cf-theme="light"] .cf-taskbadge')) {
+  throw new Error('task-node-ui.css: expected the task badge with a light override')
+}
+if (!TASKNODE_JS.includes('TYPES.task.ins') || !TASKNODE_JS.includes('function taskBadgeHtml(')
+  || !TASKNODE_JS.includes('function autoIdentifyType(')) {
+  throw new Error('task-node-ui.js: expected the typeOf merge point, the badge and the type management')
+}
+if (!TASKNODE_JS.includes("apiPost('node-type'")) {
+  throw new Error('task-node-ui.js: expected POST /codeflow/api/node-type as the only typing data source')
+}
+if (TASKNODE_JS.includes('setTimeout')) {
+  throw new Error('task-node-ui.js: must not guess types client-side (no timers)')
+}
+
 /* ------------------------------------------------------- menu (v1.3.0) --- */
 /* 命名菜单栏（需求一）：样式与绑定补丁。模型/渲染在 lib/ui/menu*.js（构建期
    已渲染成静态标记）；本补丁只做开关/键盘/委托/状态广播。 */
@@ -2372,7 +2591,7 @@ const LIGHT_CSS = readText(new URL('theme-light.css', import.meta.url)).trim()
 if (!LIGHT_CSS.includes('html[data-cf-theme="light"] #codeflow-canvas')) {
   throw new Error('theme-light.css: expected the light variable block')
 }
-text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${BROWSE_CSS}\n${MENU_CSS}\n${CARDS_CSS}\n${LOGVIEW_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + browse + menu + cards + logview + light theme stylesheet')
+text = replaceOnce(text, '</style>', `\n${FEATURES_CSS}\n\n${COUPLING_CSS}\n\n${EXTRA_CSS}\n${BROWSE_CSS}\n${MENU_CSS}\n${CARDS_CSS}\n${LOGVIEW_CSS}\n${TASKNODE_CSS}\n${LIGHT_CSS}\n</style>`, 'features + coupling + browse + menu + cards + logview + tasknode + light theme stylesheet')
 
 /* ------------------------------------------------ action manifest (v1.2.2) --- */
 /* 控件清单注入：与 tests/buttons.mjs 同源（都 import lib/ui/actions.js），
@@ -2398,11 +2617,13 @@ if (!FIT_POPOVER_JS.includes('minListHeight') || !FIT_POPOVER_JS.includes("side"
    再后（它包装 showBanner 并引用 ACT/runNode 等既有绑定），FEATURES_JS 之后是
    COUPLING_JS（包装 adoptServerState/refreshLatestSoon/renderChrome/renderNodes，
    并提供右键菜单引用的 canAnalyzeCouplingNode/runCouplingAnalysis）与 DROP_JS
-   （拖拽导入，依赖 coupling 的 refreshCouplingStale 与 toast/openModal 等）。 */
+   （拖拽导入，依赖 coupling 的 refreshCouplingStale 与 toast/openModal 等）。
+   TASKNODE_JS 紧跟 ACTIVITY_JS（包装它的 openDetails；typeOf 合并点必须在
+   boot() 清洗连线之前生效）。 */
 text = replaceOnce(
   text,
   '\nboot();\n})();',
-  '\n' + ACTION_MANIFEST_JS + '\n' + FIT_POPOVER_JS + '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\n' + BROWSE_JS + '\n' + LOG_JS + '\n' + MENU_JS + '\n' + CARDS_JS + '\n' + LOGVIEW_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\ninitLogExtras();\ninitMenuExtras();\ninitCardsExtras();\n})();',
+  '\n' + ACTION_MANIFEST_JS + '\n' + FIT_POPOVER_JS + '\n' + VIEW_JS + '\n' + ACTIVITY_JS + '\n' + TASKNODE_JS + '\n' + SETTINGS_JS + '\n' + FEATURES_JS + '\n' + COUPLING_JS + '\n' + DROP_JS + '\n' + BROWSE_JS + '\n' + LOG_JS + '\n' + MENU_JS + '\n' + CARDS_JS + '\n' + LOGVIEW_JS + '\nboot();\ninitCanvasExtras();\ninitCouplingExtras();\ninitDropExtras();\ninitLogExtras();\ninitMenuExtras();\ninitCardsExtras();\n})();',
   'canvas extras script',
 )
 

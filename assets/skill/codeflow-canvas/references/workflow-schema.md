@@ -78,6 +78,7 @@
 | `nodes[].detail` | string | ≤400 字符详情（产出文件清单等），"查看详情"展示 |
 | `nodes[].artifacts` | array | **可选**（v0.5.0 起）。节点产出的真实文件清单，`[{path, label?, kind?}]`；`path` 为工作区相对路径（`/` 分隔），`kind` ∈ `code\|doc\|test\|config\|asset\|other`；每节点 ≤50 条，宿主清洗。**谁填**：实际写文件的节点完成时必填（见 node-types.md）。宿主也用它把 agent 真实编辑的文件匹配回任务节点（高亮） |
 | `nodes[].presented` | array | **可选**。实际提交给 `present` 工具的路径数组（`deliver` 节点专用，由宿主/agent 回填） |
+| `nodes[].meta.cf` | object | **可选**（v1.5.0 起，仅任务节点）。`cf.task:true` 是结构标记（端口/控件永远取 `task` 档案）；`cf.typeAuto` 是宿主回合结束后的识别结果 `{v:1, type, by:"host"|"manual", at, reason, counts, sample[≤3]}`（≤400 字节，只含项目内相对路径）；`cf.typeLocked:true` 表示手动锁定，自动识别跳过。agent 与画布都应**原样保留**这些字段，撤销运行时随快照一起回滚 |
 | `links` | array | 四元组 `[fromNodeId, fromSlotIdx, toNodeId, toSlotIdx]`；slot 序号 = 该节点 inputs/outputs 定义中的下标 |
 | `meta` | object | 时间戳；`meta.importedFrom`（导入项目）为项目源目录的绝对路径，也是撤销快照的根；`meta.strategy` ∈ `tasks` \| `modules` 标明视图归属 |
 | `nodes[].coupling` | object | **可选**（v1.2 起，仅模块结构图的文件级 `module` 节点）。模块耦合分析结果，由宿主 `POST /codeflow/api/coupling` 写入：`{level:"low"\|"medium"\|"high", score:0-100, intra, inter, metrics:{fanIn,fanOut,closure,depth,sccSize,symbols,refs,density,maxFanOut,lines,parsed}, at}`。宿主白名单清洗（未知键丢弃、数值夹紧、≤800 字节）；agent 与画布都应**原样保留**。`level` 阈值固定 30/60 |

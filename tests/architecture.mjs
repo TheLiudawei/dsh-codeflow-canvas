@@ -103,9 +103,13 @@ const L1 = (rel) => [
   'lib/analyst.js', 'lib/features.js', 'lib/workspace.js', 'lib/codeflow-config.js',
   'lib/migration.js', 'lib/message.js', 'lib/workspace-binding.js', 'lib/archive.js',
   'lib/drop-import.js', 'lib/starter.js', 'lib/browse.js',
+  // v1.5.0：类型判定规则（纯函数，唯一规则表）。
+  'lib/typing/classify.js',
 ].includes(rel) || rel.startsWith('lib/scan/') || rel.startsWith('lib/features/') || rel.startsWith('lib/cards/')
 const L2 = (rel) => [
   'lib/duo.js', 'lib/import/pipeline.js', 'lib/sessions.js', 'lib/activity.js', 'lib/undo.js', 'lib/gestures.js',
+  // v1.5.0：识别编排（依赖注入，读 store/undo/activity 组装证据写图）。
+  'lib/typing/service.js',
 ].includes(rel)
 const L3 = (rel) => rel.startsWith('lib/http/') || [
   'lib/routes.js', 'lib/commands.js', 'lib/tool.js', 'lib/features-tool.js', 'lib/skill.js',

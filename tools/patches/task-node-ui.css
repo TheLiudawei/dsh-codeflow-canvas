@@ -1,0 +1,11 @@
+/* ---- v1.5.0：任务节点徽章 / 详情「要求」编辑区 ----
+ * 任务节点（meta.cf.task）头部的来源徽章：未识别「任务」、已识别显示类型
+ * 标签、手动锁定「手动」。颜色刻意低饱和（任务 = 未分类，不应比状态徽章
+ * 更抢眼）；浅色覆盖带属性前缀，深色规则不动。 */
+.cf-taskbadge{font-size:9.5px;padding:0 6px;border-radius:8px;border:1px solid rgba(148,163,184,.55);color:#94a3b8;flex:0 0 auto;white-space:nowrap;}
+.cf-taskbadge.auto{border-color:rgba(124,140,255,.5);color:#c3cbff;}
+.cf-taskbadge.manual{border-color:rgba(245,158,11,.5);color:#fbbf24;}
+.cf-reqedit{display:flex;flex-direction:column;gap:6px;}
+html[data-cf-theme="light"] .cf-taskbadge{border-color:rgba(93,102,115,.5);color:#5d6673;}
+html[data-cf-theme="light"] .cf-taskbadge.auto{border-color:rgba(79,91,213,.55);color:#3b46b8;}
+html[data-cf-theme="light"] .cf-taskbadge.manual{border-color:rgba(161,98,7,.55);color:#a16207;}
