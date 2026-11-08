@@ -98,6 +98,12 @@ jobs:
         shell: bash
         run: node tests/undo.mjs
 
+      - name: typing — auto-typing verdicts, attribution, locking, undo rollback
+        # 一个套件红了仍要跑完其余，一轮就能看到全部失败
+        if: always()
+        shell: bash
+        run: node tests/typing.mjs
+
       - name: coupling — deterministic scoring, thresholds, persistence
         # 一个套件红了仍要跑完其余，一轮就能看到全部失败
         if: always()
